@@ -86,9 +86,10 @@ int
 apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk);
 void
 apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_elem_t *ciphertext, block *plaintext);
+         struct apse_ctxt_elem_t *ciphertext, element_t *plaintext,
+         const unsigned int *seed);
 void
-apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, block *plaintext,
+apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
          struct apse_ctxt_elem_t *ciphertext, const int *attrs);
 void
 apse_unlink(struct apse_pp_t *pp, struct apse_pk_t *rpk, struct apse_sk_t *rsk,

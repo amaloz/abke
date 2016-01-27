@@ -298,36 +298,40 @@ cleanup:
 
 void
 apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_elem_t *ciphertext, block *plaintext)
+         struct apse_ctxt_elem_t *ciphertext, element_t *plaintext,
+         const unsigned int *seed)
 {
     element_t s;
-    element_t c0a, c0b, c1a, c1b;
-    element_t h;
 
     element_init_Zr(s, pp->pairing);
-    element_init_G1(c0a, pp->pairing);
-    element_init_G1(c0b, pp->pairing);
-    element_init_G1(c1a, pp->pairing);
-    element_init_G1(c1b, pp->pairing);
-    element_init_G1(h, pp->pairing);
+
+    if (seed) {
+        pbc_random_set_deterministic(*seed);
+    }
 
     for (int i = 0; i < pp->m; ++i) {
         element_random(s);
         element_pow_zn(ciphertext[2 * i].ca, pk->g, s);
         element_pow_zn(ciphertext[2 * i].cb, pk->es[i], s);
-        element_from_hash(h, &plaintext[2 * i], 16);
-        element_mul(ciphertext[2 * i].cb, ciphertext[2 * i].cb, h);
+        element_mul(ciphertext[2 * i].cb,
+                    ciphertext[2 * i].cb, plaintext[2 * i]);
 
         element_random(s);
         element_pow_zn(ciphertext[2 * i + 1].ca, pk->h, s);
         element_pow_zn(ciphertext[2 * i + 1].cb, pk->es[i], s);
-        element_from_hash(h, &plaintext[2 * i + 1], 16);
-        element_mul(ciphertext[2 * i + 1].cb, ciphertext[2 * i + 1].cb, h);
+        element_mul(ciphertext[2 * i + 1].cb,
+                    ciphertext[2 * i + 1].cb, plaintext[2 * i + 1]);
     }
+
+    if (seed) {
+        pbc_random_set_file("/dev/urandom");
+    }
+
+    element_clear(s);
 }
 
 void
-apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, block *plaintext,
+apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
          struct apse_ctxt_elem_t *ciphertext, const int *attrs)
 {
     element_t tmp;
@@ -348,8 +352,7 @@ apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, block *plaintext,
             abort();
         }
         element_pow_zn(tmp, elem->ca, sk->rs[i]);
-        element_div(tmp, elem->cb, tmp);
-        /* TODO: convert tmp -> block */
+        element_div(plaintext[i], elem->cb, tmp);
     }
 
     element_clear(tmp);

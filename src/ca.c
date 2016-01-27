@@ -45,6 +45,21 @@ ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
         struct apse_sk_t *sk, const int *attrs)
 {
     int cafd;
+    /* struct apse_pk_t lpk; */
+    /* struct apse_sk_t lsk; */
+    /* int delete_pk = 0, delete_sk = 0; */
+
+
+    /* if (!pk) { */
+    /*     apse_pk_init(pp, &lpk); */
+    /*     pk = &lpk; */
+    /*     delete_pk = 1; */
+    /* } */
+    /* if (!sk) { */
+    /*     apse_sk_init(pp, &lsk); */
+    /*     sk = &lsk; */
+    /*     delete_sk = 1; */
+    /* } */
 
     if ((cafd = net_init_client(CA_HOST, CA_PORT)) == -1) {
         perror("net_init_client");
@@ -55,6 +70,11 @@ ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
     net_send(cafd, attrs, sizeof(int) * pp->m, 0);
     apse_pk_recv(pp, pk, cafd);
     apse_sk_recv(pp, sk, cafd);
+
+    /* if (delete_pk) */
+    /*     apse_pk_clear(pp, &lpk); */
+    /* if (delete_sk) */
+    /*     apse_sk_clear(pp, &lsk); */
 
     close(cafd);
     return 0;
@@ -76,8 +96,6 @@ ca_init(const char *host, const char *port, int m, const char *fname)
 
     apse_pp_init(&pp, m, fname, NULL);
     apse_master_init(&pp, &master);
-
-    apse_pp_print(&pp);
 
     while (1) {
         if (loop(sockfd, &pp, &master) == -1)
