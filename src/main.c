@@ -20,24 +20,17 @@ static void
 args_init(struct args *args)
 {
     args->role = ROLE_NONE;
-    args->m = 2;
+    args->m = 16;
     args->host = "127.0.0.1";
     args->port = "1250";
-    args->attrs = calloc(args->m, sizeof(int));
-    for (int i = 0; i < args->m; ++i)
-        args->attrs[i] = 1;
-}
-
-static void
-args_clear(struct args *args)
-{
-    free(args->attrs);
+    args->attrs = NULL;
 }
 
 static struct option opts[] = {
     {"ca", no_argument, 0, 'a'},
     {"server", no_argument, 0, 's'},
     {"client", no_argument, 0, 'c'},
+    {"nattrs", required_argument, 0, 'm'},
     {"test", no_argument, 0, 't'},
     {0, 0, 0, 0}
 };
@@ -62,9 +55,11 @@ go(struct args *args)
 }
 
 static int
-test(void)
+test(struct args *args)
 {
-    return test_apse();
+    test_AND_circuit(args->m);
+    /* test_apse(); */
+    return 0;
 }
 
 int
@@ -75,7 +70,7 @@ main(int argc, char *argv[])
 
     args_init(&args);
 
-    while ((c = getopt_long(argc, argv, "acst", opts, &idx)) != -1) {
+    while ((c = getopt_long(argc, argv, "acm:st", opts, &idx)) != -1) {
         switch (c) {
         case 'a':
             args.role = ROLE_CA;
@@ -83,16 +78,22 @@ main(int argc, char *argv[])
         case 'c':
             args.role = ROLE_CLIENT;
             break;
+        case 'm':
+            args.m = atoi(optarg);
+            break;
         case 's':
             args.role = ROLE_SERVER;
             break;
         case 't':
-            return test();
+            return test(&args);
         default:
             break;
         }
     }
+    args.attrs = calloc(args.m, sizeof(int));
+    for (int i = 0; i < args.m; ++i)
+        args.attrs[i] = 1 /* rand() % 2 */;
     res = go(&args);
-    args_clear(&args);
+    free(args.attrs);
     return res;
 }

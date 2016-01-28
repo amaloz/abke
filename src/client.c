@@ -13,15 +13,15 @@
 #include "gates.h"
 
 static void
-buildCircuit(GarbledCircuit *gc, int n)
+build_AND_circuit(GarbledCircuit *gc, int n)
 {
     block inputLabels[2 * n];
     block outputLabels[n];
     GarblingContext ctxt;
     int wire;
     int wires[n];
-    int r = n + n / 2;
     int q = n - 1;
+    int r = n + q;
 
     countToN(wires, n);
 
@@ -29,9 +29,7 @@ buildCircuit(GarbledCircuit *gc, int n)
     createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
     startBuilding(gc, &ctxt);
 
-    wire = getNextWire(&ctxt);
-    ANDGate(gc, &ctxt, wires[0], wires[1], wire);
-    /* ANDCircuit(gc, &ctxt, n, wires, &wire); */
+    ANDCircuit(gc, &ctxt, n, wires, &wire);
 
     finishBuilding(gc, &ctxt, outputLabels, wires);
 }
@@ -104,8 +102,6 @@ _commit(block label, block *r, int fd, abke_time_t *total)
     {
         block commitment;
 
-        /* Need seedRandom() for randomBlock() */
-        (void) seedRandom(NULL);
         if (RAND_bytes((unsigned char *) r, sizeof(block)) == 0) {
             fprintf(stderr, "RAND_bytes failed\n");
             return -1;
@@ -167,7 +163,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, GarbledCircuit *gc,
         /* Regarble the circuit to verify that it was constructed correctly */
         hashGarbledCircuit(gc, gc_hash, GARBLE_TYPE_STANDARD);
         (void) seedRandom(&gc_seed);
-        buildCircuit(&gc2, pp->m);
+        build_AND_circuit(&gc2, pp->m);
         garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE_STANDARD);
         gc_built = 1;
         if (checkGarbledCircuit(&gc2, gc_hash, GARBLE_TYPE_STANDARD) != 0) {
@@ -204,7 +200,8 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     struct apse_master_t mpk;
     struct apse_pk_t pk, rpk;
     struct apse_sk_t sk, rsk;
-    block key;
+    block *input_labels;
+    block key = zero_block();
 
     GarbledCircuit gc;
     int gc_built = 0;
@@ -227,6 +224,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
             element_init_G1(ctxts[i].ca, pp.pairing);
             element_init_G1(ctxts[i].cb, pp.pairing);
         }
+        input_labels = allocate_blocks(pp.m);
 
     }
     _end = get_time();
@@ -235,6 +233,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
 
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs);
     if (res == -1) goto cleanup;
+
     _start = get_time();
     {
         /* XXX: doesn't work yet */
@@ -273,41 +272,26 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     fprintf(stderr, "receive ctxt/gc: %f\n", _end - _start);
     total += _end - _start;
 
-    _start = get_time();
     {
-        block *input_labels;
         block output_label, r;
 
-        input_labels = allocate_blocks(pp.m);
-        res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, NULL); /* XXX: should be rsk */
-        if (res == -1) {
-            free(input_labels);
-            goto cleanup;
-        }
-        res = _evaluate(&gc, input_labels, &output_label, NULL);
-        if (res == -1) {
-            free(input_labels);
-            goto cleanup;
-        }
+        res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total); /* XXX: should be rsk */
+        if (res == -1) goto cleanup;
+        res = _evaluate(&gc, input_labels, &output_label, &total);
+        if (res == -1) goto cleanup;
         gc_built = 1;
-        res = _commit(output_label, &r, fd, NULL);
-        if (res == -1) {
-            free(input_labels);
-            goto cleanup;
-        }
-        res = _check(&pp, &pk, &gc, ctxts, fd, NULL);
-        if (res == -1) {
-            free(input_labels);
-            goto cleanup;
-        }
+        res = _commit(output_label, &r, fd, &total);
+        if (res == -1) goto cleanup;
+        res = _check(&pp, &pk, &gc, ctxts, fd, &total);
+        if (res == -1) goto cleanup;
 
+        _start = get_time();
         net_send(fd, &output_label, sizeof output_label, 0);
         net_send(fd, &r, sizeof r, 0);
-    
-        free(input_labels);
+        _end = get_time();
+        fprintf(stderr, "Send decommitment: %f\n", _end - _start);
+        total += _end - _start;
     }
-    _end = get_time();
-    total += _end - _start;
 
     _start = get_time();
     {
@@ -329,9 +313,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     fprintf(stderr, "Coin tossing: %f\n", _end - _start);
     total += _end - _start;
 
-
     res = 0;
-
 cleanup:
     _start = get_time();
     {

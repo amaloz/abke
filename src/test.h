@@ -3,5 +3,7 @@
 
 int
 test_apse(void);
+int
+test_AND_circuit(int m);
 
 #endif

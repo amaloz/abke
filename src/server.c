@@ -12,15 +12,15 @@
 #include "gates.h"
 
 static void
-buildCircuit(GarbledCircuit *gc, int n)
+build_AND_circuit(GarbledCircuit *gc, int n)
 {
     block inputLabels[2 * n];
     block outputLabels[n];
     GarblingContext ctxt;
     int wire;
     int wires[n];
-    int r = n + n / 2;
     int q = n - 1;
+    int r = n + q;
 
     countToN(wires, n);
 
@@ -28,9 +28,7 @@ buildCircuit(GarbledCircuit *gc, int n)
     createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
     startBuilding(gc, &ctxt);
 
-    /* ANDCircuit(gc, &ctxt, n, wires, &wire); */
-    wire = getNextWire(&ctxt);
-    ANDGate(gc, &ctxt, wires[0], wires[1], wire);
+    ANDCircuit(gc, &ctxt, n, wires, &wire);
 
     finishBuilding(gc, &ctxt, outputLabels, wires);
 }
@@ -58,7 +56,7 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
     abke_time_t _start, _end;
     _start = get_time();
     {
-        buildCircuit(gc, pp->m);
+        build_AND_circuit(gc, pp->m);
         garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
     }
     _end = get_time();
@@ -122,7 +120,7 @@ server_go(const char *host, const char *port, int m)
     GarbledCircuit gc;
     int gc_built = 0;
     element_t *inputs;
-    block *input_labels, output_labels[2], key;
+    block *input_labels, output_labels[2], key = zero_block();
     unsigned int enc_seed;
     abke_time_t _start, _end, total = 0.0;
     int res = -1;

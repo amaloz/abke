@@ -3,6 +3,31 @@
 #include "apse.h"
 #include "util.h"
 
+#include <openssl/rand.h>
+#include "circuits.h"
+
+static void
+build_AND_circuit(GarbledCircuit *gc, int n)
+{
+    block inputLabels[2 * n];
+    block outputLabels[n];
+    GarblingContext ctxt;
+    int wire;
+    int wires[n];
+    int q = n - 1;
+    int r = n + q;
+
+    countToN(wires, n);
+
+    createInputLabels(inputLabels, n);
+    createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
+    startBuilding(gc, &ctxt);
+
+    ANDCircuit(gc, &ctxt, n, wires, &wire);
+
+    finishBuilding(gc, &ctxt, outputLabels, wires);
+}
+
 int
 test_apse(void)
 {
@@ -47,5 +72,31 @@ test_apse(void)
         element_printf("%B\n%B\n%B\n\n", inputs[2 * i], inputs[2 * i + 1], ptxt[i]);
     }
 
+    return 0;
+}
+
+int
+test_AND_circuit(int m)
+{
+    GarbledCircuit gc;
+    block *inputs, *extracted, outputs[2], output;
+
+    inputs = allocate_blocks(2 * m);
+    extracted = allocate_blocks(m);
+    for(int i = 0; i < 2 * m; ++i) {
+        RAND_bytes((unsigned char *) &inputs[i], sizeof(block));
+    }
+    for (int i = 0; i < m; ++i) {
+        extracted[i] = inputs[2 * i];
+    }
+    build_AND_circuit(&gc, m);
+    garbleCircuit(&gc, inputs, outputs, GARBLE_TYPE_STANDARD);
+    print_block(outputs[0]);
+    printf(" ");
+    print_block(outputs[1]);
+    printf("\n");
+    evaluate(&gc, extracted, &output, GARBLE_TYPE_STANDARD);
+    print_block(output);
+    printf("\n");
     return 0;
 }
