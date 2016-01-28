@@ -1,4 +1,5 @@
-#include "apse.h"
+#include "ca.h"
+
 #include "net.h"
 #include "util.h"
 
@@ -10,72 +11,69 @@ static int
 loop(int sockfd, struct apse_pp_t *pp, struct apse_master_t *master)
 {
     int fd;
-    int *attrs;
-    struct apse_pk_t pk;
-    struct apse_sk_t sk;
+    enum role_e role;
 
     if ((fd = net_server_accept(sockfd)) == -1) {
         perror("net_server_accept");
         return -1;
     }
 
-    fprintf(stderr, "Connection...\n");
+    fprintf(stderr, "Connection from... ");
 
-    attrs = calloc(pp->m, sizeof(int));
-    apse_pk_init(pp, &pk);
-    apse_sk_init(pp, &sk);
-
+    net_recv(fd, &role, sizeof role, 0);
+    switch (role) {
+    case ROLE_CLIENT:
+        fprintf(stderr, "CLIENT\n");
+        break;
+    case ROLE_SERVER:
+        fprintf(stderr, "SERVER\n");
+        break;
+    default:
+        fprintf(stderr, "INVALID!\n");
+        return -1;
+    }
+    
     apse_mpk_send(pp, master, fd);
-    net_recv(fd, attrs, sizeof(int) * pp->m, 0);
-    apse_gen(pp, master, &pk, &sk, attrs);
-    apse_pk_send(pp, &pk, fd);
-    apse_sk_send(pp, &sk, fd);
+    if (role == ROLE_CLIENT) {
+        int *attrs;
+        struct apse_pk_t pk;
+        struct apse_sk_t sk;
 
-    apse_sk_clear(pp, &sk);
-    apse_pk_clear(pp, &pk);
-    free(attrs);
+        attrs = calloc(pp->m, sizeof(int));
+        apse_pk_init(pp, &pk);
+        apse_sk_init(pp, &sk);
+        net_recv(fd, attrs, sizeof(int) * pp->m, 0);
+        apse_gen(pp, master, &pk, &sk, attrs);
+        apse_pk_send(pp, &pk, fd);
+        apse_sk_send(pp, &sk, fd);
 
+        apse_sk_clear(pp, &sk);
+        apse_pk_clear(pp, &pk);
+        free(attrs);
+    }
     close(fd);
 
     return 0;
 }
 
 int
-ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
-        struct apse_sk_t *sk, const int *attrs)
+ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, enum role_e role,
+        struct apse_pk_t *pk, struct apse_sk_t *sk, const int *attrs)
 {
     int cafd;
-    /* struct apse_pk_t lpk; */
-    /* struct apse_sk_t lsk; */
-    /* int delete_pk = 0, delete_sk = 0; */
-
-
-    /* if (!pk) { */
-    /*     apse_pk_init(pp, &lpk); */
-    /*     pk = &lpk; */
-    /*     delete_pk = 1; */
-    /* } */
-    /* if (!sk) { */
-    /*     apse_sk_init(pp, &lsk); */
-    /*     sk = &lsk; */
-    /*     delete_sk = 1; */
-    /* } */
 
     if ((cafd = net_init_client(CA_HOST, CA_PORT)) == -1) {
         perror("net_init_client");
         return -1;
     }
 
+    net_send(cafd, &role, sizeof role, 0);
     apse_mpk_recv(pp, mpk, cafd);
-    net_send(cafd, attrs, sizeof(int) * pp->m, 0);
-    apse_pk_recv(pp, pk, cafd);
-    apse_sk_recv(pp, sk, cafd);
-
-    /* if (delete_pk) */
-    /*     apse_pk_clear(pp, &lpk); */
-    /* if (delete_sk) */
-    /*     apse_sk_clear(pp, &lsk); */
-
+    if (role == ROLE_CLIENT) {
+        net_send(cafd, attrs, sizeof(int) * pp->m, 0);
+        apse_pk_recv(pp, pk, cafd);
+        apse_sk_recv(pp, sk, cafd);
+    }
     close(cafd);
     return 0;
 }

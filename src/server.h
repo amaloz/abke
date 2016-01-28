@@ -2,6 +2,6 @@
 #define SERVER_H
 
 int
-server_go(const char *host, const char *port, const int *attrs, int m);
+server_go(const char *host, const char *port, int m);
 
 #endif

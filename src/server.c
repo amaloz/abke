@@ -10,35 +10,112 @@
 #include "gates.h"
 
 static void
-buildCircuit(GarbledCircuit *gc, int n, int nlayers)
+buildCircuit(GarbledCircuit *gc)
 {
-    block inputLabels[2 * n];
-    block outputLabels[n];
+    block inputLabels[2 * 2];
+    block outputLabels[2];
     GarblingContext ctxt;
     int wire;
-    int wires[n];
-    int r = n + n / 2 * nlayers;
-    int q = n / 2 * nlayers;
+    int wires[2];
+    int r = 3;
+    int q = 1;
 
-    countToN(wires, n);
+    countToN(wires, 2);
 
-    createInputLabels(inputLabels, n);
-    createEmptyGarbledCircuit(gc, n, n, q, r, inputLabels);
+    createInputLabels(inputLabels, 2);
+    createEmptyGarbledCircuit(gc, 2, 1, q, r, inputLabels);
     startBuilding(gc, &ctxt);
 
-    for (int i = 0; i < nlayers; ++i) {
-        for (int j = 0; j < n; j += 2) {
-            wire = getNextWire(&ctxt);
-            ANDGate(gc, &ctxt, wires[j], wires[j+1], wire);
-            wires[j] = wires[j+1] = wire;
-        }
+    for (int j = 0; j < 2; j += 2) {
+        wire = getNextWire(&ctxt);
+        ANDGate(gc, &ctxt, wires[j], wires[j+1], wire);
+        wires[j] = wire;
     }
 
     finishBuilding(gc, &ctxt, outputLabels, wires);
 }
 
+static int
+connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
+{
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        if (ca_info(pp, mpk, ROLE_SERVER, NULL, NULL, NULL) == -1) {
+            fprintf(stderr, "Unable to connect to CA\n");
+            return -1;
+        }
+    }
+    _end = get_time();
+    fprintf(stderr, "Get CA info: %f\n", _end - _start);
+    return 0;
+}
+
+static int
+server_garble(GarbledCircuit *gc, block *input_labels, block *output_labels)
+{
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        buildCircuit(gc);
+        printf("Input labels:\n");
+        for (int i = 0; i < gc->n; ++i) {
+            printf("\t");
+            print_block(input_labels[2 * i]);
+            printf(" ");
+            print_block(input_labels[2 * i + 1]);
+            printf("\n");
+        }
+        garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
+        printf("Output labels:\n");
+        printf("\t");
+        print_block(output_labels[0]);
+        printf(" ");
+        print_block(output_labels[1]);
+        printf("\n");
+    }
+    _end = get_time();
+    fprintf(stderr, "Garble circuit: %f\n", _end - _start);
+    return 0;
+}
+
+static int
+get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
+       int fd)
+{
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        apse_pk_recv(pp, pk, fd);
+        if (!apse_vrfy(pp, mpk, pk)) {
+            fprintf(stderr, "pk fails to verify\n");
+            return -1;
+        }
+    }
+    _end = get_time();
+    fprintf(stderr, "get randomized pk: %f\n", _end - _start);
+    return 0;
+}
+
+static int
+encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
+        struct apse_ctxt_elem_t *ctxts, element_t *inputs,
+        unsigned int *seed)
+{
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        *seed = (unsigned int) rand(); /* XXX: TODO: FIXME: ah! insecure! */
+        apse_enc(pp, pk, ctxts, inputs, seed);
+    }
+    _end = get_time();
+    fprintf(stderr, "encrypt: %f\n", _end - _start);
+    return 0;
+}
+
+
 int
-server_go(const char *host, const char *port, const int *attrs, int m)
+server_go(const char *host, const char *port, int m)
 {
     int sockfd = -1, fd = -1;
     block gc_seed, commitment;
@@ -48,13 +125,10 @@ server_go(const char *host, const char *port, const int *attrs, int m)
     struct apse_ctxt_elem_t *ctxts;
     GarbledCircuit gc;
     element_t *inputs;
-    block *input_labels;
+    block *input_labels, output_labels[2];
     unsigned int enc_seed;
     abke_time_t _start, _end;
     int res = -1;
-
-    struct apse_pk_t pk;
-    struct apse_sk_t sk;
 
     /* Initialization */
     _start = get_time();
@@ -62,8 +136,6 @@ server_go(const char *host, const char *port, const int *attrs, int m)
         gc_seed = seedRandom(NULL);
         apse_pp_init(&pp, m, PARAMFILE, NULL);
         apse_master_init(&pp, &mpk);
-        apse_pk_init(&pp, &pk);
-        apse_sk_init(&pp, &sk);
         apse_pk_init(&pp, &client_pk);
         inputs = calloc(2 * pp.m, sizeof(element_t));
         input_labels = calloc(2 * pp.m, sizeof(block));
@@ -75,38 +147,14 @@ server_go(const char *host, const char *port, const int *attrs, int m)
             element_init_G1(ctxts[i].ca, pp.pairing);
             element_init_G1(ctxts[i].cb, pp.pairing);
         }
-        /* for (int i = 0; i < pp.m; ++i) { */
-        /*     element_printf("%B\n%B\n\n", inputs[2 * i], inputs[2 * i + 1]); */
-        /* } */
-        /* for (int i = 0; i < pp.m; ++i) { */
-        /*     print_block(input_labels[2 * i]); */
-        /*     printf(" "); */
-        /*     print_block(input_labels[2 * i + 1]); */
-        /*     printf("\n"); */
-        /* } */
     }
     _end = get_time();
     fprintf(stderr, "Initialization: %f\n", _end - _start);
 
-    /* Connect to CA */
-    _start = get_time();
-    {
-        if (ca_info(&pp, &mpk, &pk, &sk, attrs) == -1) {
-            fprintf(stderr, "Unable to connect to CA\n");
-            goto cleanup;
-        }
-    }
-    _end = get_time();
-    fprintf(stderr, "Get CA info: %f\n", _end - _start);
-
-    /* Garble circuit */
-    _start = get_time();
-    {
-        buildCircuit(&gc, pp.m, 1);
-        garbleCircuit(&gc, input_labels, NULL, GARBLE_TYPE_STANDARD);
-    }
-    _end = get_time();
-    fprintf(stderr, "Garble circuit: %f\n", _end - _start);
+    res = connect_to_ca(&pp, &mpk);
+    if (res == -1) goto cleanup;
+    res = server_garble(&gc, input_labels, output_labels);
+    if (res == -1) goto cleanup;
 
     /* Initialize server and accept connection from client */
     if ((sockfd = net_init_server(host, port)) == -1) {
@@ -118,26 +166,10 @@ server_go(const char *host, const char *port, const int *attrs, int m)
         exit(EXIT_FAILURE);
     }
 
-    /* Get randomized pk from client */
-    _start = get_time();
-    {
-        apse_pk_recv(&pp, &client_pk, fd);
-        if (!apse_vrfy(&pp, &mpk, &client_pk)) {
-            fprintf(stderr, "pk fails to verify\n");
-            goto cleanup;
-        }
-    }
-    _end = get_time();
-    fprintf(stderr, "get randomized pk: %f\n", _end - _start);
-
-    /* Encrypt GC input labels */
-    _start = get_time();
-    {
-        enc_seed = (unsigned int) rand(); /* XXX: TODO: FIXME: ah! */
-        apse_enc(&pp, &client_pk, ctxts, inputs, &enc_seed);
-    }
-    _end = get_time();
-    fprintf(stderr, "encrypt: %f\n", _end - _start);
+    res = get_pk(&pp, &mpk, &client_pk, fd);
+    if (res == -1) goto cleanup;
+    encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed);
+    if (res == -1) goto cleanup;
 
     /* Send ciphertext and GC to client */
     _start = get_time();
@@ -172,9 +204,18 @@ server_go(const char *host, const char *port, const int *attrs, int m)
     fprintf(stderr, "send randomness/input labels: %f\n", _end - _start);
 
     {
-        block output_label;
+        block output_label, r, commitment2;
         net_recv(fd, &output_label, sizeof output_label, 0);
-        /* TODO: check equality */
+        net_recv(fd, &r, sizeof r, 0);
+        commitment2 = commit(output_label, r);
+        if (unequal_blocks(commitment, commitment2)) {
+            printf("CHEAT: commitments not equal\n");
+            goto cleanup;
+        }
+        if (unequal_blocks(output_label, output_labels[1])) {
+            printf("CHEAT: not 1-bit output label\n");
+            goto cleanup;
+        }
     }
 
     fprintf(stderr, "DO COIN TOSSING!\n");

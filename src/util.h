@@ -15,7 +15,7 @@ block
 element_to_block(element_t elem);
 
 block
-hash_block(block in);
+commit(block in, block r);
 
 typedef double abke_time_t;
 #define get_time() pbc_get_time()

@@ -42,13 +42,16 @@ element_to_block(element_t elem)
     return out;
 }
 
-/* XXX: NOT SECURE AS A COMMITMENT */
 block
-hash_block(block in)
+commit(block in, block r)
 {
     block out;
+    block input[2];
 
-    sha1_hash((char *) &out, sizeof out, (unsigned char *) &in, sizeof in);
+    input[0] = in;
+    input[1] = r;
+
+    sha1_hash((char *) &out, sizeof out, (unsigned char *) &input, sizeof input);
     return out;
 }
 
