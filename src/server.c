@@ -6,26 +6,29 @@
 
 #include <assert.h>
 #include <unistd.h>
+#include <openssl/rand.h>
 #include "garble.h"
+#include "circuits.h"
 #include "gates.h"
 
 static void
-buildCircuit(GarbledCircuit *gc)
+buildCircuit(GarbledCircuit *gc, int n)
 {
-    block inputLabels[2 * 2];
-    block outputLabels[2];
+    block inputLabels[2 * n];
+    block outputLabels[n];
     GarblingContext ctxt;
     int wire;
-    int wires[2];
-    int r = 3;
-    int q = 1;
+    int wires[n];
+    int r = n + n / 2;
+    int q = n - 1;
 
-    countToN(wires, 2);
+    countToN(wires, n);
 
-    createInputLabels(inputLabels, 2);
-    createEmptyGarbledCircuit(gc, 2, 1, q, r, inputLabels);
+    createInputLabels(inputLabels, n);
+    createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
     startBuilding(gc, &ctxt);
 
+    /* ANDCircuit(gc, &ctxt, n, wires, &wire); */
     wire = getNextWire(&ctxt);
     ANDGate(gc, &ctxt, wires[0], wires[1], wire);
 
@@ -49,36 +52,25 @@ _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
 }
 
 static int
-_garble(GarbledCircuit *gc, block *input_labels, block *output_labels)
+_garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
+        block *output_labels, abke_time_t *total)
 {
     abke_time_t _start, _end;
     _start = get_time();
     {
-        buildCircuit(gc);
-        /* printf("Input labels:\n"); */
-        /* for (int i = 0; i < gc->n; ++i) { */
-        /*     printf("\t"); */
-        /*     print_block(input_labels[2 * i]); */
-        /*     printf(" "); */
-        /*     print_block(input_labels[2 * i + 1]); */
-        /*     printf("\n"); */
-        /* } */
+        buildCircuit(gc, pp->m);
         garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
-        /* printf("Output labels:\n"); */
-        /* printf("\t"); */
-        /* print_block(output_labels[0]); */
-        /* printf(" "); */
-        /* print_block(output_labels[1]); */
-        /* printf("\n"); */
     }
     _end = get_time();
     fprintf(stderr, "Garble circuit: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
     return 0;
 }
 
 static int
 _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
-        int fd)
+        int fd, abke_time_t *total)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -91,22 +83,29 @@ _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
     }
     _end = get_time();
     fprintf(stderr, "get randomized pk: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
     return 0;
 }
 
 static int
 _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
          struct apse_ctxt_elem_t *ctxts, element_t *inputs,
-         unsigned int *seed)
+         unsigned int *seed, abke_time_t *total)
 {
     abke_time_t _start, _end;
     _start = get_time();
     {
-        *seed = (unsigned int) rand(); /* XXX: TODO: FIXME: ah! insecure! */
+        if (RAND_bytes((unsigned char *) seed, sizeof(unsigned int)) == 0) {
+            fprintf(stderr, "RAND_bytes failed\n");
+            return -1;
+        }
         apse_enc(pp, pk, ctxts, inputs, seed);
     }
     _end = get_time();
     fprintf(stderr, "encrypt: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
     return 0;
 }
 
@@ -123,9 +122,9 @@ server_go(const char *host, const char *port, int m)
     GarbledCircuit gc;
     int gc_built = 0;
     element_t *inputs;
-    block *input_labels, output_labels[2];
+    block *input_labels, output_labels[2], key;
     unsigned int enc_seed;
-    abke_time_t _start, _end;
+    abke_time_t _start, _end, total = 0.0;
     int res = -1;
 
     /* Initialization */
@@ -151,7 +150,7 @@ server_go(const char *host, const char *port, int m)
 
     res = _connect_to_ca(&pp, &mpk);
     if (res == -1) goto cleanup;
-    res = _garble(&gc, input_labels, output_labels);
+    res = _garble(&pp, &gc, input_labels, output_labels, &total);
     if (res == -1) goto cleanup;
     gc_built = 1;
 
@@ -165,9 +164,9 @@ server_go(const char *host, const char *port, int m)
         exit(EXIT_FAILURE);
     }
 
-    res = _get_pk(&pp, &mpk, &client_pk, fd);
+    res = _get_pk(&pp, &mpk, &client_pk, fd, &total);
     if (res == -1) goto cleanup;
-    res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed);
+    res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed, &total);
     if (res == -1) goto cleanup;
 
     /* Send ciphertext and GC to client */
@@ -181,6 +180,7 @@ server_go(const char *host, const char *port, int m)
     }
     _end = get_time();
     fprintf(stderr, "send ctxt/gc: %f\n", _end - _start);
+    total += _end - _start;
 
     /* Receive commitment from client */
     _start = get_time();
@@ -189,6 +189,7 @@ server_go(const char *host, const char *port, int m)
     }
     _end = get_time();
     fprintf(stderr, "receive commitment: %f\n", _end - _start);
+    total += _end - _start;
 
     /* Send randomness and inputs to client */
     _start = get_time();
@@ -201,7 +202,9 @@ server_go(const char *host, const char *port, int m)
     }
     _end = get_time();
     fprintf(stderr, "send randomness/input labels: %f\n", _end - _start);
+    total += _end - _start;
 
+    _start = get_time();
     {
         block output_label, r, commitment2;
         net_recv(fd, &output_label, sizeof output_label, 0);
@@ -216,32 +219,62 @@ server_go(const char *host, const char *port, int m)
             goto cleanup;
         }
     }
+    _end = get_time();
+    fprintf(stderr, "Check commitment/1-bit output label: %f\n", _end - _start);
+    total += _end - _start;
 
-    fprintf(stderr, "DO COIN TOSSING!\n");
+    _start = get_time();
+    {
+        block a, acom, b;
+        if (RAND_bytes((unsigned char *) &a, sizeof a) == 0) {
+            fprintf(stderr, "RAND_bytes failed\n");
+            goto cleanup;
+        }
+        acom = commit(a, zero_block());
+        net_send(fd, &acom, sizeof acom, 0);
+        net_recv(fd, &b, sizeof b, 0);
+        net_send(fd, &a, sizeof a, 0);
+        key = xorBlocks(a, b);
+    }
+    _end = get_time();
+    fprintf(stderr, "Coin tossing: %f\n", _end - _start);
+    total += _end - _start;
 
     res = 0;
 
 cleanup:
-    for (int i = 0; i < 2 * m; ++i) {
-        element_clear(inputs[i]);
-        element_clear(ctxts[i].ca);
-        element_clear(ctxts[i].cb);
+    _start = get_time();
+    {
+        for (int i = 0; i < 2 * m; ++i) {
+            element_clear(inputs[i]);
+            element_clear(ctxts[i].ca);
+            element_clear(ctxts[i].cb);
+        }
+        free(inputs);
+        free(ctxts);
+        free(input_labels);
+
+        apse_pk_clear(&pp, &client_pk);
+        apse_master_clear(&pp, &mpk);
+        apse_pp_clear(&pp);
+
+        if (gc_built)
+            removeGarbledCircuit(&gc);
+
+        if (fd != -1)
+            close(fd);
+        if (sockfd != -1)
+            close(sockfd);
     }
-    free(inputs);
-    free(ctxts);
-    free(input_labels);
+    _end = get_time();
+    fprintf(stderr, "Cleanup: %f\n", _end - _start);
+    total += _end - _start;
 
-    apse_pk_clear(&pp, &client_pk);
-    apse_master_clear(&pp, &mpk);
-    apse_pp_clear(&pp);
+    fprintf(stderr, "Total time: %f\n", total);
 
-    if (gc_built)
-        removeGarbledCircuit(&gc);
-
-    if (fd != -1)
-        close(fd);
-    if (sockfd != -1)
-        close(sockfd);
+    printf("KEY: ");
+    print_block(key);
+    printf("\n");
 
     return res;
 }

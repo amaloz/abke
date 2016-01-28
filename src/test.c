@@ -10,6 +10,8 @@ test_apse(void)
     struct apse_master_t master;
     struct apse_pk_t pk;
     struct apse_sk_t sk;
+    struct apse_pk_t rpk;
+    struct apse_sk_t rsk;
     int *attrs;
     struct apse_ctxt_elem_t *ctxt;
     element_t *inputs;
@@ -19,6 +21,8 @@ test_apse(void)
     apse_master_init(&pp, &master);
     apse_pk_init(&pp, &pk);
     apse_sk_init(&pp, &sk);
+    apse_pk_init(&pp, &rpk);
+    apse_sk_init(&pp, &rsk);
     attrs = calloc(pp.m, sizeof(int));
     ptxt = calloc(pp.m, sizeof(element_t));
     for (int i = 0; i < pp.m; ++i) {
@@ -36,6 +40,7 @@ test_apse(void)
     }
 
     apse_gen(&pp, &master, &pk, &sk, attrs);
+    apse_unlink(&pp, &rpk, &rsk, &pk, &sk);
     apse_enc(&pp, &pk, ctxt, inputs, NULL);
     apse_dec(&pp, &sk, ptxt, ctxt, attrs);
     for (int i = 0; i < pp.m; ++i) {
