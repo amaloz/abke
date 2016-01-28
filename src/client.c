@@ -138,6 +138,8 @@ check(struct apse_pp_t *pp, struct apse_pk_t *pk, GarbledCircuit *gc,
         free(claimed_ctxts);
         free(claimed_inputs);
         free(claimed_input_labels);
+
+        removeGarbledCircuit(&gc2);
     }
     _end = get_time();
     fprintf(stderr, "Check: %f\n", _end - _start);
@@ -152,11 +154,15 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     struct apse_master_t mpk;
     struct apse_pk_t pk, rpk;
     struct apse_sk_t sk, rsk;
-    struct apse_ctxt_elem_t *ctxts;
+
     GarbledCircuit gc;
+
     element_t *inputs;
     block *input_labels;
-    block output_label, commitment, r;
+    struct apse_ctxt_elem_t *ctxts;
+
+    block output_label = zero_block(), commitment, r;
+
     abke_time_t _start, _end;
     int res = -1;
 
@@ -169,10 +175,11 @@ client_go(const char *host, const char *port, const int *attrs, int m)
         apse_pk_init(&pp, &rpk);
         apse_sk_init(&pp, &rsk);
         inputs = calloc(pp.m, sizeof(element_t));
+        input_labels = allocate_blocks(pp.m);
         for (int i = 0; i < pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
+            input_labels[i] = zero_block();
         }
-        input_labels = allocate_blocks(pp.m);
         ctxts = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(ctxts[i].ca, pp.pairing);
@@ -223,17 +230,18 @@ client_go(const char *host, const char *port, const int *attrs, int m)
 
     _start = get_time();
     {
+        /* block output_label; */
         evaluate(&gc, input_labels, &output_label, GARBLE_TYPE_STANDARD);
+        printf("Output label:\n\t");
+        print_block(output_label);
+        printf("\n");
     }
     _end = get_time();
     fprintf(stderr, "Evaluate GC: %f\n", _end - _start);
 
-    printf("Output label:\n\t");
-    print_block(output_label);
-    printf("\n");
-
     _start = get_time();
     {
+        /* Need seedRandom() for randomBlock() */
         (void) seedRandom(NULL);
         r = randomBlock();
         commitment = commit(output_label, r);
@@ -269,6 +277,8 @@ cleanup:
     apse_pk_clear(&pp, &pk);
     apse_master_clear(&pp, &mpk);
     apse_pp_clear(&pp);
+
+    removeGarbledCircuit(&gc);
 
     if (fd != -1)
         close(fd);

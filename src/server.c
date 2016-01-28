@@ -207,6 +207,9 @@ server_go(const char *host, const char *port, int m)
         block output_label, r, commitment2;
         net_recv(fd, &output_label, sizeof output_label, 0);
         net_recv(fd, &r, sizeof r, 0);
+        printf("Received output label:\n\t");
+        print_block(output_label);
+        printf("\n");
         commitment2 = commit(output_label, r);
         if (unequal_blocks(commitment, commitment2)) {
             printf("CHEAT: commitments not equal\n");
@@ -235,6 +238,8 @@ cleanup:
     apse_pk_clear(&pp, &client_pk);
     apse_master_clear(&pp, &mpk);
     apse_pp_clear(&pp);
+
+    removeGarbledCircuit(&gc);
 
     if (fd != -1)
         close(fd);

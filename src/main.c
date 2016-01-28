@@ -28,6 +28,12 @@ args_init(struct args *args)
         args->attrs[i] = 1;
 }
 
+static void
+args_clear(struct args *args)
+{
+    free(args->attrs);
+}
+
 static struct option opts[] = {
     {"ca", no_argument, 0, 'a'},
     {"server", no_argument, 0, 's'},
@@ -64,7 +70,7 @@ test(void)
 int
 main(int argc, char *argv[])
 {
-    int c, idx;
+    int c, idx, res;
     struct args args;
 
     args_init(&args);
@@ -86,5 +92,7 @@ main(int argc, char *argv[])
             break;
         }
     }
-    return go(&args);
+    res = go(&args);
+    args_clear(&args);
+    return res;
 }

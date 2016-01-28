@@ -39,6 +39,7 @@ element_to_block(element_t elem)
     buf = malloc(length);
     (void) element_to_bytes(buf, elem);
     sha1_hash((char *) &out, sizeof out, buf, length);
+    free(buf);
     return out;
 }
 
