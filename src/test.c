@@ -15,7 +15,7 @@ test_apse(void)
     element_t *inputs;
     element_t *ptxt;
 
-    apse_pp_init(&pp, 1, PARAMFILE, NULL);
+    apse_pp_init(&pp, 1, PARAMFILE);
     apse_master_init(&pp, &master);
     apse_pk_init(&pp, &pk);
     apse_sk_init(&pp, &sk);

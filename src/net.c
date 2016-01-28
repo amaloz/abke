@@ -181,13 +181,12 @@ net_init_client(const char *addr, const char *port)
     }
 
     if (p == NULL) {
-        fprintf(stderr, "client: failed to connect\n");
+        freeaddrinfo(servinfo);
         return -1;
     }
 
     inet_ntop(p->ai_family, net_get_in_addr((struct sockaddr *) p->ai_addr),
               s, sizeof s);
-    /* printf("client: connecting to %s\n", s); */
 
     freeaddrinfo(servinfo);
 

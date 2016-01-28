@@ -92,7 +92,7 @@ ca_init(const char *host, const char *port, int m, const char *fname)
 
     (void) seedRandom(NULL);
 
-    apse_pp_init(&pp, m, fname, NULL);
+    apse_pp_init(&pp, m, fname);
     apse_master_init(&pp, &master);
 
     while (1) {

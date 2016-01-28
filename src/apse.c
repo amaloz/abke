@@ -4,7 +4,7 @@
 #include <assert.h>
 
 void
-apse_pp_init(struct apse_pp_t *pp, int m, const char *fname, const block *aeskey)
+apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
 {
     char param[1024];
     size_t count;
@@ -21,7 +21,6 @@ apse_pp_init(struct apse_pp_t *pp, int m, const char *fname, const block *aeskey
         pbc_die("fread");
     }
     (void) pairing_init_set_buf(pp->pairing, param, count);
-    pp->aeskey = aeskey ? *aeskey : randomBlock();
 
     fclose(f);
 }
@@ -334,28 +333,13 @@ void
 apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
          struct apse_ctxt_elem_t *ciphertext, const int *attrs)
 {
-    element_t tmp;
-
-    element_init_G1(tmp, pp->pairing);
-
     for (int i = 0; i < pp->m; ++i) {
         struct apse_ctxt_elem_t *elem;
-        switch (attrs[i]) {
-        case 0:
-            elem = &ciphertext[2 * i];
-            break;
-        case 1:
-            elem = &ciphertext[2 * i + 1];
-            break;
-        default:
-            assert(0);
-            abort();
-        }
-        element_pow_zn(tmp, elem->ca, sk->rs[i]);
-        element_div(plaintext[i], elem->cb, tmp);
+        assert(attrs[i] == 0 || attrs[i] == 1);
+        elem = &ciphertext[2 * i + attrs[i]];
+        element_pow_zn(plaintext[i], elem->ca, sk->rs[i]);
+        element_div(plaintext[i], elem->cb, plaintext[i]);
     }
-
-    element_clear(tmp);
 }
 
 void

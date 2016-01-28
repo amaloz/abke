@@ -6,7 +6,6 @@
 
 struct apse_pp_t {
     int m;
-    block aeskey;
     pairing_t pairing;
 };
 
@@ -33,7 +32,7 @@ struct apse_ctxt_elem_t {
 };
 
 void
-apse_pp_init(struct apse_pp_t *pp, int m, const char *fname, const block *aeskey);
+apse_pp_init(struct apse_pp_t *pp, int m, const char *fname);
 void
 apse_pp_clear(struct apse_pp_t *pp);
 

@@ -26,17 +26,14 @@ buildCircuit(GarbledCircuit *gc)
     createEmptyGarbledCircuit(gc, 2, 1, q, r, inputLabels);
     startBuilding(gc, &ctxt);
 
-    for (int j = 0; j < 2; j += 2) {
-        wire = getNextWire(&ctxt);
-        ANDGate(gc, &ctxt, wires[j], wires[j+1], wire);
-        wires[j] = wire;
-    }
+    wire = getNextWire(&ctxt);
+    ANDGate(gc, &ctxt, wires[0], wires[1], wire);
 
     finishBuilding(gc, &ctxt, outputLabels, wires);
 }
 
 static int
-connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
+_connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -52,27 +49,27 @@ connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
 }
 
 static int
-server_garble(GarbledCircuit *gc, block *input_labels, block *output_labels)
+_garble(GarbledCircuit *gc, block *input_labels, block *output_labels)
 {
     abke_time_t _start, _end;
     _start = get_time();
     {
         buildCircuit(gc);
-        printf("Input labels:\n");
-        for (int i = 0; i < gc->n; ++i) {
-            printf("\t");
-            print_block(input_labels[2 * i]);
-            printf(" ");
-            print_block(input_labels[2 * i + 1]);
-            printf("\n");
-        }
+        /* printf("Input labels:\n"); */
+        /* for (int i = 0; i < gc->n; ++i) { */
+        /*     printf("\t"); */
+        /*     print_block(input_labels[2 * i]); */
+        /*     printf(" "); */
+        /*     print_block(input_labels[2 * i + 1]); */
+        /*     printf("\n"); */
+        /* } */
         garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
-        printf("Output labels:\n");
-        printf("\t");
-        print_block(output_labels[0]);
-        printf(" ");
-        print_block(output_labels[1]);
-        printf("\n");
+        /* printf("Output labels:\n"); */
+        /* printf("\t"); */
+        /* print_block(output_labels[0]); */
+        /* printf(" "); */
+        /* print_block(output_labels[1]); */
+        /* printf("\n"); */
     }
     _end = get_time();
     fprintf(stderr, "Garble circuit: %f\n", _end - _start);
@@ -80,8 +77,8 @@ server_garble(GarbledCircuit *gc, block *input_labels, block *output_labels)
 }
 
 static int
-get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
-       int fd)
+_get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
+        int fd)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -98,9 +95,9 @@ get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
 }
 
 static int
-encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
-        struct apse_ctxt_elem_t *ctxts, element_t *inputs,
-        unsigned int *seed)
+_encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
+         struct apse_ctxt_elem_t *ctxts, element_t *inputs,
+         unsigned int *seed)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -124,6 +121,7 @@ server_go(const char *host, const char *port, int m)
     struct apse_pk_t client_pk;
     struct apse_ctxt_elem_t *ctxts;
     GarbledCircuit gc;
+    int gc_built = 0;
     element_t *inputs;
     block *input_labels, output_labels[2];
     unsigned int enc_seed;
@@ -134,11 +132,11 @@ server_go(const char *host, const char *port, int m)
     _start = get_time();
     {
         gc_seed = seedRandom(NULL);
-        apse_pp_init(&pp, m, PARAMFILE, NULL);
+        apse_pp_init(&pp, m, PARAMFILE);
         apse_master_init(&pp, &mpk);
         apse_pk_init(&pp, &client_pk);
         inputs = calloc(2 * pp.m, sizeof(element_t));
-        input_labels = calloc(2 * pp.m, sizeof(block));
+        input_labels = allocate_blocks(2 * pp.m);
         ctxts = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
@@ -151,10 +149,11 @@ server_go(const char *host, const char *port, int m)
     _end = get_time();
     fprintf(stderr, "Initialization: %f\n", _end - _start);
 
-    res = connect_to_ca(&pp, &mpk);
+    res = _connect_to_ca(&pp, &mpk);
     if (res == -1) goto cleanup;
-    res = server_garble(&gc, input_labels, output_labels);
+    res = _garble(&gc, input_labels, output_labels);
     if (res == -1) goto cleanup;
+    gc_built = 1;
 
     /* Initialize server and accept connection from client */
     if ((sockfd = net_init_server(host, port)) == -1) {
@@ -166,9 +165,9 @@ server_go(const char *host, const char *port, int m)
         exit(EXIT_FAILURE);
     }
 
-    res = get_pk(&pp, &mpk, &client_pk, fd);
+    res = _get_pk(&pp, &mpk, &client_pk, fd);
     if (res == -1) goto cleanup;
-    encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed);
+    res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed);
     if (res == -1) goto cleanup;
 
     /* Send ciphertext and GC to client */
@@ -207,9 +206,6 @@ server_go(const char *host, const char *port, int m)
         block output_label, r, commitment2;
         net_recv(fd, &output_label, sizeof output_label, 0);
         net_recv(fd, &r, sizeof r, 0);
-        printf("Received output label:\n\t");
-        print_block(output_label);
-        printf("\n");
         commitment2 = commit(output_label, r);
         if (unequal_blocks(commitment, commitment2)) {
             printf("CHEAT: commitments not equal\n");
@@ -239,7 +235,8 @@ cleanup:
     apse_master_clear(&pp, &mpk);
     apse_pp_clear(&pp);
 
-    removeGarbledCircuit(&gc);
+    if (gc_built)
+        removeGarbledCircuit(&gc);
 
     if (fd != -1)
         close(fd);
