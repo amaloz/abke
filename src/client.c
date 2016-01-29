@@ -52,6 +52,38 @@ _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk,
 }
 
 static int
+_receive_ciphertext(const struct apse_pp_t *pp, struct apse_ctxt_elem_t *ctxts,
+                    int fd, abke_time_t *total)
+{
+    int res = 0;
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        size_t length, p = 0;
+        unsigned char *buf;
+
+        if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+            return -1;
+        if ((buf = malloc(length)) == NULL)
+            return -1;
+        if ((res = net_recv(fd, buf, length, 0)) == -1)
+            goto cleanup;
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            p += element_from_bytes(ctxts[i].ca, buf + p);
+            p += element_from_bytes(ctxts[i].cb, buf + p);
+            element_printf("%B %B\n", ctxts[i].ca, ctxts[i].cb);
+        }
+    cleanup:
+        free(buf);
+    }
+    _end = get_time();
+    fprintf(stderr, "Receive ciphertext: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
+    return res;
+}
+
+static int
 _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
          struct apse_ctxt_elem_t *ctxts, block *input_labels,
          const int *attrs, abke_time_t *total)
@@ -78,6 +110,7 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
         *total += _end - _start;
     return 0;
 }
+
 static int
 _evaluate(GarbledCircuit *gc, const block *input_labels, block *output_label,
           abke_time_t *total)
@@ -132,6 +165,8 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, GarbledCircuit *gc,
         block *claimed_input_labels;
         block gc_seed;
         unsigned int enc_seed;
+        size_t length, p = 0;
+        unsigned char *buf = NULL;
 
         claimed_ctxts = calloc(2 * pp->m, sizeof(struct apse_ctxt_elem_t));
         claimed_inputs = calloc(2 * pp->m, sizeof(element_t));
@@ -142,15 +177,21 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, GarbledCircuit *gc,
         }
         claimed_input_labels = allocate_blocks(2 * pp->m);
 
-        net_recv(fd, &gc_seed, sizeof gc_seed, 0);
-        net_recv(fd, &enc_seed, sizeof enc_seed, 0);
-
-        /* Receive the inputs from the server, and re-encrypt to verify that
-         * the ciphertexts sent earlier are indeed correct */
+        if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+            goto cleanup;
+        if ((buf = malloc(length)) == NULL)
+            goto cleanup;
+        if ((res = net_recv(fd, buf, length, 0)) == -1)
+            goto cleanup;
+        memcpy(&gc_seed, buf + p, sizeof gc_seed);
+        p += sizeof gc_seed;
+        memcpy(&enc_seed, buf + p, sizeof enc_seed);
+        p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            net_recv_element(fd, claimed_inputs[i]);
+            p += element_from_bytes(claimed_inputs[i], buf + p);
             claimed_input_labels[i] = element_to_block(claimed_inputs[i]);
         }
+
         apse_enc(pp, pk, claimed_ctxts, claimed_inputs, &enc_seed);
         for (int i = 0; i < 2 * pp->m; ++i) {
             if (element_cmp(claimed_ctxts[i].ca, ctxts[i].ca)
@@ -201,6 +242,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     struct apse_pk_t pk;
     struct apse_sk_t sk;
     block *input_labels;
+    block output_label, decom;
     block key = zero_block();
 
     GarbledCircuit gc;
@@ -226,11 +268,19 @@ client_go(const char *host, const char *port, const int *attrs, int m)
 
     }
     _end = get_time();
-    fprintf(stderr, "Initialization: %f\n", _end - _start);
+    fprintf(stderr, "Initialize: %f\n", _end - _start);
     total += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs);
     if (res == -1) goto cleanup;
+
+    _start = get_time();
+    {
+        apse_unlink(&pp, &pk, &sk, &pk, &sk);
+    }
+    _end = get_time();
+    fprintf(stderr, "Randomize public key: %f\n", _end - _start);
+    total += _end - _start;
 
     /* Connect to server */
     if ((fd = net_init_client(host, port)) == -1) {
@@ -240,55 +290,42 @@ client_go(const char *host, const char *port, const int *attrs, int m)
 
     _start = get_time();
     {
-        apse_unlink(&pp, &pk, &sk, &pk, &sk);
-    }
-    _end = get_time();
-    fprintf(stderr, "Randomize pk: %f\n", _end - _start);
-    total += _end - _start;
-
-    _start = get_time();
-    {
         apse_pk_send(&pp, &pk, fd);
     }
     _end = get_time();
-    fprintf(stderr, "Send pk: %f\n", _end - _start);
+    fprintf(stderr, "Send public key: %f\n", _end - _start);
     total += _end - _start;
+
+    res = _receive_ciphertext(&pp, ctxts, fd, &total);
+    if (res == -1) goto cleanup;
+    _start = get_time();
+    {
+        gc_comm_recv(fd, &gc);
+    }
+    _end = get_time();
+    fprintf(stderr, "Receive garbled circuit: %f\n", _end - _start);
+    total += _end - _start;
+
+
+    res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total);
+    if (res == -1) goto cleanup;
+    
+    res = _evaluate(&gc, input_labels, &output_label, &total);
+    if (res == -1) goto cleanup;
+    gc_built = 1;
+    res = _commit(output_label, &decom, fd, &total);
+    if (res == -1) goto cleanup;
+    res = _check(&pp, &pk, &gc, ctxts, fd, &total);
+    if (res == -1) goto cleanup;
 
     _start = get_time();
     {
-        for (int i = 0; i < 2 * pp.m; ++i) {
-            if (net_recv_element(fd, ctxts[i].ca) == -1)
-                goto cleanup;
-            if (net_recv_element(fd, ctxts[i].cb) == -1)
-                goto cleanup;
-        }
-        if (gc_comm_recv(fd, &gc) == -1)
-            goto cleanup;
+        net_send(fd, &output_label, sizeof output_label, 0);
+        net_send(fd, &decom, sizeof decom, 0);
     }
     _end = get_time();
-    fprintf(stderr, "receive ctxt/gc: %f\n", _end - _start);
+    fprintf(stderr, "Send decommitment: %f\n", _end - _start);
     total += _end - _start;
-
-    {
-        block output_label, r;
-
-        res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total);
-        if (res == -1) goto cleanup;
-        res = _evaluate(&gc, input_labels, &output_label, &total);
-        if (res == -1) goto cleanup;
-        gc_built = 1;
-        res = _commit(output_label, &r, fd, &total);
-        if (res == -1) goto cleanup;
-        res = _check(&pp, &pk, &gc, ctxts, fd, &total);
-        if (res == -1) goto cleanup;
-
-        _start = get_time();
-        net_send(fd, &output_label, sizeof output_label, 0);
-        net_send(fd, &r, sizeof r, 0);
-        _end = get_time();
-        fprintf(stderr, "Send decommitment: %f\n", _end - _start);
-        total += _end - _start;
-    }
 
     _start = get_time();
     {

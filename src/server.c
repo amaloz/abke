@@ -80,7 +80,7 @@ _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
         }
     }
     _end = get_time();
-    fprintf(stderr, "get randomized pk: %f\n", _end - _start);
+    fprintf(stderr, "Receive and verify public key: %f\n", _end - _start);
     if (total)
         *total += _end - _start;
     return 0;
@@ -101,10 +101,83 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
         apse_enc(pp, pk, ctxts, inputs, seed);
     }
     _end = get_time();
-    fprintf(stderr, "encrypt: %f\n", _end - _start);
+    fprintf(stderr, "Encrypt: %f\n", _end - _start);
     if (total)
         *total += _end - _start;
     return 0;
+}
+
+static int
+_send_ciphertext(const struct apse_pp_t *pp, struct apse_ctxt_elem_t *ctxts,
+                 int fd, abke_time_t *total)
+{
+    int res = 0;
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        size_t length = 0, p = 0;
+        unsigned char *buf;
+
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            length += element_length_in_bytes(ctxts[i].ca);
+            length += element_length_in_bytes(ctxts[i].cb);
+        }
+        if ((buf = malloc(length)) == NULL)
+            return -1;
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            p += element_to_bytes(buf + p, ctxts[i].ca);
+            p += element_to_bytes(buf + p, ctxts[i].cb);
+            element_printf("%B %B\n", ctxts[i].ca, ctxts[i].cb);
+        }
+        if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+            goto cleanup;
+        res = net_send(fd, buf, length, 0);
+    cleanup:
+        free(buf);
+    }
+    _end = get_time();
+    fprintf(stderr, "Send ciphertext: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
+    return res;
+}
+
+static int
+_send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
+                            unsigned int enc_seed, element_t *inputs, int fd,
+                            abke_time_t *total)
+{
+    int res = 0;
+    abke_time_t _start, _end;
+    _start = get_time();
+    {
+        size_t length = 0, p = 0;
+        unsigned char *buf;
+
+        length += sizeof gc_seed;
+        length += sizeof enc_seed;
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            length += element_length_in_bytes(inputs[i]);
+        }
+        if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+            return -1;
+        if ((buf = malloc(length)) == NULL)
+            return -1;
+        memcpy(buf + p, &gc_seed, sizeof gc_seed);
+        p += sizeof gc_seed;
+        memcpy(buf + p, &enc_seed, sizeof enc_seed);
+        p += sizeof enc_seed;
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            p += element_to_bytes(buf + p, inputs[i]);
+        }
+        res = net_send(fd, buf, length, 0);
+        free(buf);
+    }
+    _end = get_time();
+    fprintf(stderr, "Send randomness and inputs: %f\n", _end - _start);
+    if (total)
+        *total += _end - _start;
+    return res;
 }
 
 
@@ -142,7 +215,7 @@ server_go(const char *host, const char *port, int m)
         }
     }
     _end = get_time();
-    fprintf(stderr, "Initialization: %f\n", _end - _start);
+    fprintf(stderr, "Initialize: %f\n", _end - _start);
 
     _start = get_time();
     {
@@ -175,17 +248,14 @@ server_go(const char *host, const char *port, int m)
     res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed, &total);
     if (res == -1) goto cleanup;
 
-    /* Send ciphertext and GC to client */
+    res = _send_ciphertext(&pp, ctxts, fd, &total);
+    if (res == -1) goto cleanup;
     _start = get_time();
     {
-        for (int i = 0; i < 2 * pp.m; ++i) {
-            net_send_element(fd, ctxts[i].ca);
-            net_send_element(fd, ctxts[i].cb);
-        }
         gc_comm_send(fd, &gc);
     }
     _end = get_time();
-    fprintf(stderr, "send ctxt/gc: %f\n", _end - _start);
+    fprintf(stderr, "Send garbled circuit: %f\n", _end - _start);
     total += _end - _start;
 
     /* Receive commitment from client */
@@ -194,21 +264,23 @@ server_go(const char *host, const char *port, int m)
         net_recv(fd, &commitment, sizeof commitment, 0);
     }
     _end = get_time();
-    fprintf(stderr, "receive commitment: %f\n", _end - _start);
+    fprintf(stderr, "Receive commitment: %f\n", _end - _start);
     total += _end - _start;
 
     /* Send randomness and inputs to client */
-    _start = get_time();
-    {
-        net_send(fd, &gc_seed, sizeof gc_seed, 0);
-        net_send(fd, &enc_seed, sizeof enc_seed, 0);
-        for (int i = 0; i < 2 * pp.m; ++i) {
-            net_send_element(fd, inputs[i]);
-        }
-    }
-    _end = get_time();
-    fprintf(stderr, "send randomness/input labels: %f\n", _end - _start);
-    total += _end - _start;
+    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &total);
+    if (res == -1) goto cleanup;
+    /* _start = get_time(); */
+    /* { */
+    /*     net_send(fd, &gc_seed, sizeof gc_seed, 0); */
+    /*     net_send(fd, &enc_seed, sizeof enc_seed, 0); */
+    /*     for (int i = 0; i < 2 * pp.m; ++i) { */
+    /*         net_send_element(fd, inputs[i]); */
+    /*     } */
+    /* } */
+    /* _end = get_time(); */
+    /* fprintf(stderr, "Send randomness and input labels: %f\n", _end - _start); */
+    /* total += _end - _start; */
 
     _start = get_time();
     {
@@ -226,7 +298,7 @@ server_go(const char *host, const char *port, int m)
         }
     }
     _end = get_time();
-    fprintf(stderr, "Check commitment/1-bit output label: %f\n", _end - _start);
+    fprintf(stderr, "Check commitment and output label: %f\n", _end - _start);
     total += _end - _start;
 
     _start = get_time();

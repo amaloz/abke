@@ -62,14 +62,14 @@ apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master, int fd);
 void
 apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd);
 
-void
+int
 apse_pk_send(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd);
-void
+int
 apse_pk_recv(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd);
 
-void
+int
 apse_sk_send(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd);
-void
+int
 apse_sk_recv(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd);
 
 

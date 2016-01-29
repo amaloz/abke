@@ -1,6 +1,5 @@
 #include "apse.h"
 #include "net.h"
-#include "util.h"
 
 #include <assert.h>
 
@@ -173,54 +172,119 @@ apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd)
     }
 }
 
-void
+int
 apse_pk_send(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
 {
-    net_send_element(fd, pk->g);
-    net_send_element(fd, pk->h);
-    net_send_element(fd, pk->u);
-    net_send_element(fd, pk->gsig);
-    net_send_element(fd, pk->hsig);
-    net_send_element(fd, pk->usig);
+    size_t length = 0, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    length += element_length_in_bytes(pk->g);
+    length += element_length_in_bytes(pk->h);
+    length += element_length_in_bytes(pk->u);
+    length += element_length_in_bytes(pk->gsig);
+    length += element_length_in_bytes(pk->hsig);
+    length += element_length_in_bytes(pk->usig);
     for (int i = 0; i < pp->m; ++i) {
-        net_send_element(fd, pk->es[i]);
+        length += element_length_in_bytes(pk->es[i]);
+        length += element_length_in_bytes(pk->esigs[i]);
+    }
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    p += element_to_bytes(buf + p, pk->g);
+    p += element_to_bytes(buf + p, pk->h);
+    p += element_to_bytes(buf + p, pk->u);
+    p += element_to_bytes(buf + p, pk->gsig);
+    p += element_to_bytes(buf + p, pk->hsig);
+    p += element_to_bytes(buf + p, pk->usig);
+    for (int i = 0; i < pp->m; ++i) {
+        p += element_to_bytes(buf + p, pk->es[i]);
     }
     for (int i = 0; i < pp->m; ++i) {
-        net_send_element(fd, pk->esigs[i]);
+        p += element_to_bytes(buf + p, pk->esigs[i]);
     }
+    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+        goto cleanup;
+    res = net_send(fd, buf, length, 0);
+cleanup:
+    free(buf);
+    return res;
 }
 
-void
+int
 apse_pk_recv(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
 {
-    net_recv_element(fd, pk->g);
-    net_recv_element(fd, pk->h);
-    net_recv_element(fd, pk->u);
-    net_recv_element(fd, pk->gsig);
-    net_recv_element(fd, pk->hsig);
-    net_recv_element(fd, pk->usig);
+    size_t length, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+        return -1;
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    if ((res = net_recv(fd, buf, length, 0)) == -1)
+        goto cleanup;
+    p += element_from_bytes(pk->g, buf + p);
+    p += element_from_bytes(pk->h, buf + p);
+    p += element_from_bytes(pk->u, buf + p);
+    p += element_from_bytes(pk->gsig, buf + p);
+    p += element_from_bytes(pk->hsig, buf + p);
+    p += element_from_bytes(pk->usig, buf + p);
     for (int i = 0; i < pp->m; ++i) {
-        net_recv_element(fd, pk->es[i]);
+        p += element_from_bytes(pk->es[i], buf + p);
     }
     for (int i = 0; i < pp->m; ++i) {
-        net_recv_element(fd, pk->esigs[i]);
+        p += element_from_bytes(pk->esigs[i], buf + p);
     }
+
+cleanup:
+    free(buf);
+    return res;
 }
 
-void
+int
 apse_sk_send(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
 {
+    size_t length = 0, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
     for (int i = 0; i < pp->m; ++i) {
-        net_send_element(fd, sk->rs[i]);
+        length += element_length_in_bytes(sk->rs[i]);
     }
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    for (int i = 0; i < pp->m; ++i) {
+        p += element_to_bytes(buf + p, sk->rs[i]);
+    }
+    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+        goto cleanup;
+    res = net_send(fd, buf, length, 0);
+cleanup:
+    free(buf);
+    return res;
 }
 
-void
+int
 apse_sk_recv(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
 {
+    size_t length, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+        return -1;
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    if ((res = net_recv(fd, buf, length, 0)) == -1)
+        goto cleanup;
+
     for (int i = 0; i < pp->m; ++i) {
-        net_recv_element(fd, sk->rs[i]);
+        p += element_from_bytes(sk->rs[i], buf + p);
     }
+cleanup:
+    free(buf);
+    return res;
 }
 
 /* Print APSE functions */
@@ -297,9 +361,6 @@ apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk)
 {
     element_t tmp;
     int res = 0;
-    abke_time_t _start, _end;
-
-    _start = get_time();
 
     element_init_G1(tmp, pp->pairing);
 
@@ -318,9 +379,6 @@ apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk)
 
 cleanup:
     element_clear(tmp);
-
-    _end = get_time();
-    fprintf(stderr, "apse_vrfy: %f\n", _end - _start);
     return res;
 }
 
