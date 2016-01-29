@@ -131,6 +131,28 @@ apse_sk_clear(const struct apse_pp_t *pp, struct apse_sk_t *sk)
     free(sk->rs);
 }
 
+void
+apse_ctxt_init(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
+{
+    element_init_G1(ctxt->g, pp->pairing);
+    element_init_G1(ctxt->h, pp->pairing);
+    ctxt->c2s = calloc(2 * pp->m, sizeof(element_t));
+    for (int i = 0; i < 2 * pp->m; ++i) {
+        element_init_G1(ctxt->c2s[i], pp->pairing);
+    }
+}
+
+void
+apse_ctxt_clear(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
+{
+    element_clear(ctxt->g);
+    element_clear(ctxt->h);
+    for (int i = 0; i < 2 * pp->m; ++i) {
+        element_clear(ctxt->c2s[i]);
+    }
+    free(ctxt->c2s);
+}
+
 /* Send/receive functions */
 
 static void
@@ -287,6 +309,58 @@ cleanup:
     return res;
 }
 
+int
+apse_ctxt_send(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
+{
+    size_t length = 0, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    length += element_length_in_bytes(ctxt->g);
+    length += element_length_in_bytes(ctxt->h);
+    for (int i = 0; i < 2 * pp->m; ++i) {
+        length += element_length_in_bytes(ctxt->c2s[i]);
+    }
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    p += element_to_bytes(buf + p, ctxt->g);
+    p += element_to_bytes(buf + p, ctxt->h);
+    for (int i = 0; i < 2 * pp->m; ++i) {
+        p += element_to_bytes(buf + p, ctxt->c2s[i]);
+    }
+    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+        goto cleanup;
+    res = net_send(fd, buf, length, 0);
+cleanup:
+    free(buf);
+    return res;
+}
+
+int
+apse_ctxt_recv(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
+{
+    size_t length, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+        return -1;
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    if ((res = net_recv(fd, buf, length, 0)) == -1)
+        goto cleanup;
+
+    p += element_from_bytes(ctxt->g, buf + p);
+    p += element_from_bytes(ctxt->h, buf + p);
+    for (int i = 0; i < 2 * pp->m; ++i) {
+        p += element_from_bytes(ctxt->c2s[i], buf + p);
+    }
+cleanup:
+    free(buf);
+    return res;
+    
+}
+
 /* Print APSE functions */
 
 void
@@ -384,7 +458,7 @@ cleanup:
 
 void
 apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_elem_t *ciphertext, element_t *plaintext,
+         struct apse_ctxt_t *ciphertext, element_t *plaintext,
          const unsigned int *seed)
 {
     element_t s, t;
@@ -401,17 +475,17 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
 
     element_random(s);
     element_random(t);
+    element_pp_pow_zn(ciphertext->g, s, g_pp);
+    element_pp_pow_zn(ciphertext->h, t, h_pp);
 
     for (int i = 0; i < pp->m; ++i) {
-        element_pp_pow_zn(ciphertext[2 * i].ca, s, g_pp);
-        element_pow_zn(ciphertext[2 * i].cb, pk->es[i], s);
-        element_mul(ciphertext[2 * i].cb,
-                    ciphertext[2 * i].cb, plaintext[2 * i]);
+        element_pow_zn(ciphertext->c2s[2 * i], pk->es[i], s);
+        element_mul(ciphertext->c2s[2 * i],
+                    ciphertext->c2s[2 * i], plaintext[2 * i]);
 
-        element_pp_pow_zn(ciphertext[2 * i + 1].ca, t, h_pp);
-        element_pow_zn(ciphertext[2 * i + 1].cb, pk->es[i], t);
-        element_mul(ciphertext[2 * i + 1].cb,
-                    ciphertext[2 * i + 1].cb, plaintext[2 * i + 1]);
+        element_pow_zn(ciphertext->c2s[2 * i + 1], pk->es[i], t);
+        element_mul(ciphertext->c2s[2 * i + 1],
+                    ciphertext->c2s[2 * i + 1], plaintext[2 * i + 1]);
     }
 
     if (seed) {
@@ -426,14 +500,25 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
 
 void
 apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
-         struct apse_ctxt_elem_t *ciphertext, const int *attrs)
+         struct apse_ctxt_t *ciphertext, const int *attrs)
 {
-    struct apse_ctxt_elem_t *elem;
+    element_pp_t g_pp, h_pp;
+
+    element_pp_init(g_pp, ciphertext->g);
+    element_pp_init(h_pp, ciphertext->h);
+
+    
     for (int i = 0; i < pp->m; ++i) {
-        elem = &ciphertext[2 * i + attrs[i]];
-        element_pow_zn(plaintext[i], elem->ca, sk->rs[i]);
-        element_div(plaintext[i], elem->cb, plaintext[i]);
+        if (attrs[i]) {
+            element_pp_pow_zn(plaintext[i], sk->rs[i], h_pp);
+        } else {
+            element_pp_pow_zn(plaintext[i], sk->rs[i], g_pp);
+        }
+        element_div(plaintext[i], ciphertext->c2s[2 * i + attrs[i]], plaintext[i]);
     }
+
+    element_pp_clear(g_pp);
+    element_pp_clear(h_pp);
 }
 
 void

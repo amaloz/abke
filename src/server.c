@@ -4,7 +4,7 @@
 #include "net.h"
 #include "util.h"
 
-#define THPOOL 1
+/* #define THPOOL 1 */
 
 #ifdef THPOOL
 #include "thpool.h"
@@ -96,35 +96,40 @@ thpool_apse_vrfy(void *vargs)
 
 static int
 _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
-        int fd, abke_time_t *total)
+        int fd, abke_time_t *comm, abke_time_t *comp)
 {
     abke_time_t _start, _end;
+
     _start = get_time();
-    {
-        apse_pk_recv(pp, pk, fd);
-#ifdef THPOOL
-        g_thpool_args.pp = pp;
-        g_thpool_args.mpk = mpk;
-        g_thpool_args.pk = pk;
-        g_thpool_args.result = 0;
-        thpool_add_work(g_thpool, thpool_apse_vrfy, &g_thpool_args);
-#else
-        if (!apse_vrfy(pp, mpk, pk)) {
-            fprintf(stderr, "pk fails to verify\n");
-            return -1;
-        }
-#endif
-    }
+    apse_pk_recv(pp, pk, fd);
     _end = get_time();
-    fprintf(stderr, "Receive and verify public key: %f\n", _end - _start);
-    if (total)
-        *total += _end - _start;
+    fprintf(stderr, "Receive public key: %f\n", _end - _start);
+    if (comm)
+        *comm += _end - _start;
+
+    _start = get_time();
+#ifdef THPOOL
+    g_thpool_args.pp = pp;
+    g_thpool_args.mpk = mpk;
+    g_thpool_args.pk = pk;
+    g_thpool_args.result = 0;
+    thpool_add_work(g_thpool, thpool_apse_vrfy, &g_thpool_args);
+#else
+    if (!apse_vrfy(pp, mpk, pk)) {
+        fprintf(stderr, "pk fails to verify\n");
+        return -1;
+    }
+#endif
+    _end = get_time();
+    fprintf(stderr, "Verify public key: %f\n", _end - _start);
+    if (comp)
+        *comp += _end - _start;
     return 0;
 }
 
 static int
 _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_elem_t *ctxts, element_t *inputs,
+         struct apse_ctxt_t *ctxt, element_t *inputs,
          unsigned int *seed, abke_time_t *total)
 {
     abke_time_t _start, _end;
@@ -134,47 +139,13 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
             fprintf(stderr, "RAND_bytes failed\n");
             return -1;
         }
-        apse_enc(pp, pk, ctxts, inputs, seed);
+        apse_enc(pp, pk, ctxt, inputs, seed);
     }
     _end = get_time();
     fprintf(stderr, "Encrypt: %f\n", _end - _start);
     if (total)
         *total += _end - _start;
     return 0;
-}
-
-static int
-_send_ciphertext(const struct apse_pp_t *pp, struct apse_ctxt_elem_t *ctxts,
-                 int fd, abke_time_t *total)
-{
-    int res = 0;
-    abke_time_t _start, _end;
-    _start = get_time();
-    {
-        size_t length = 0, p = 0;
-        unsigned char *buf;
-
-        for (int i = 0; i < 2 * pp->m; ++i) {
-            length += element_length_in_bytes_compressed(ctxts[i].ca);
-            length += element_length_in_bytes_compressed(ctxts[i].cb);
-        }
-        if ((buf = malloc(length)) == NULL)
-            return -1;
-        for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_to_bytes_compressed(buf + p, ctxts[i].ca);
-            p += element_to_bytes_compressed(buf + p, ctxts[i].cb);
-        }
-        if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
-            goto cleanup;
-        res = net_send(fd, buf, length, 0);
-    cleanup:
-        free(buf);
-    }
-    _end = get_time();
-    fprintf(stderr, "Send ciphertext: %f\n", _end - _start);
-    if (total)
-        *total += _end - _start;
-    return res;
 }
 
 static int
@@ -224,13 +195,13 @@ server_go(const char *host, const char *port, int m)
     struct apse_pp_t pp;
     struct apse_master_t mpk;
     struct apse_pk_t client_pk;
-    struct apse_ctxt_elem_t *ctxts;
+    struct apse_ctxt_t ctxt;
     GarbledCircuit gc;
     int gc_built = 0;
     element_t *inputs;
     block *input_labels, output_labels[2], key = zero_block();
     unsigned int enc_seed;
-    abke_time_t _start, _end, total = 0.0;
+    abke_time_t _start, _end, comm = 0.0, comp = 0.0;
     int res = -1;
 
     fprintf(stderr, "Starting server with m = %d\n", m);
@@ -250,17 +221,16 @@ server_go(const char *host, const char *port, int m)
         apse_pp_init(&pp, m, PARAMFILE);
         apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &client_pk);
+        apse_ctxt_init(&pp, &ctxt);
         inputs = calloc(2 * pp.m, sizeof(element_t));
-        input_labels = allocate_blocks(2 * pp.m);
-        ctxts = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
-            element_init_G1(ctxts[i].ca, pp.pairing);
-            element_init_G1(ctxts[i].cb, pp.pairing);
         }
+        input_labels = allocate_blocks(2 * pp.m);
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
+    comp += _end - _start;
 
     _start = get_time();
     {
@@ -271,10 +241,11 @@ server_go(const char *host, const char *port, int m)
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
+    comp += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk);
     if (res == -1) goto cleanup;
-    res = _garble(&pp, &gc, input_labels, output_labels, &total);
+    res = _garble(&pp, &gc, input_labels, output_labels, &comp);
     if (res == -1) goto cleanup;
     gc_built = 1;
 
@@ -288,9 +259,9 @@ server_go(const char *host, const char *port, int m)
         exit(EXIT_FAILURE);
     }
 
-    res = _get_pk(&pp, &mpk, &client_pk, fd, &total);
+    res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp);
     if (res == -1) goto cleanup;
-    res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed, &total);
+    res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp);
     if (res == -1) goto cleanup;
 #ifdef THPOOL
     thpool_wait(g_thpool);
@@ -300,15 +271,21 @@ server_go(const char *host, const char *port, int m)
     }
 #endif
 
-    res = _send_ciphertext(&pp, ctxts, fd, &total);
-    if (res == -1) goto cleanup;
+    _start = get_time();
+    {
+        apse_ctxt_send(&pp, &ctxt, fd);
+    }
+    _end = get_time();
+    fprintf(stderr, "Send ciphertext: %f\n", _end - _start);
+    comm += _end - _start;
+
     _start = get_time();
     {
         gc_comm_send(fd, &gc);
     }
     _end = get_time();
     fprintf(stderr, "Send garbled circuit: %f\n", _end - _start);
-    total += _end - _start;
+    comm += _end - _start;
 
     _start = get_time();
     {
@@ -316,17 +293,24 @@ server_go(const char *host, const char *port, int m)
     }
     _end = get_time();
     fprintf(stderr, "Receive commitment: %f\n", _end - _start);
-    total += _end - _start;
+    comm += _end - _start;
 
     /* Send randomness and inputs to client */
-    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &total);
+    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &comm);
     if (res == -1) goto cleanup;
 
-    _start = get_time();
+
     {
         block output_label, r, commitment2;
+
+        _start = get_time();
         net_recv(fd, &output_label, sizeof output_label, 0);
         net_recv(fd, &r, sizeof r, 0);
+        _end = get_time();
+        fprintf(stderr, "Receive decommitment: %f\n", _end - _start);
+        comm += _end - _start;
+
+        _start = get_time();
         commitment2 = commit(output_label, r);
         if (unequal_blocks(commitment, commitment2)) {
             printf("CHEAT: commitments not equal\n");
@@ -336,27 +320,34 @@ server_go(const char *host, const char *port, int m)
             printf("CHEAT: not 1-bit output label\n");
             goto cleanup;
         }
+        _end = get_time();
+        fprintf(stderr, "Check commitment and output label: %f\n", _end - _start);
+        comp += _end - _start;
     }
-    _end = get_time();
-    fprintf(stderr, "Check commitment and output label: %f\n", _end - _start);
-    total += _end - _start;
 
-    _start = get_time();
     {
         block a, acom, b;
+
+        _start = get_time();
         if (RAND_bytes((unsigned char *) &a, sizeof a) == 0) {
             fprintf(stderr, "RAND_bytes failed\n");
             goto cleanup;
         }
         acom = commit(a, zero_block());
+        _end = get_time();
+        fprintf(stderr, "Compute commitment for coin tossing: %f\n", _end - _start);
+        comp += _end - _start;
+
+        _start = get_time();
         net_send(fd, &acom, sizeof acom, 0);
         net_recv(fd, &b, sizeof b, 0);
         net_send(fd, &a, sizeof a, 0);
         key = xorBlocks(a, b);
+        _end = get_time();
+        fprintf(stderr, "Coin tossing: %f\n", _end - _start);
+        comm += _end - _start;
+
     }
-    _end = get_time();
-    fprintf(stderr, "Coin tossing: %f\n", _end - _start);
-    total += _end - _start;
 
     res = 0;
 
@@ -368,13 +359,11 @@ cleanup:
 #endif
         for (int i = 0; i < 2 * m; ++i) {
             element_clear(inputs[i]);
-            element_clear(ctxts[i].ca);
-            element_clear(ctxts[i].cb);
         }
         free(inputs);
-        free(ctxts);
         free(input_labels);
 
+        apse_ctxt_clear(&pp, &ctxt);
         apse_pk_clear(&pp, &client_pk);
         apse_mpk_clear(&pp, &mpk);
         apse_pp_clear(&pp);
@@ -389,11 +378,14 @@ cleanup:
     }
     _end = get_time();
     fprintf(stderr, "Cleanup: %f\n", _end - _start);
-    total += _end - _start;
+    comp += _end - _start;
 
-    fprintf(stderr, "Total time: %f\n", total);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Communication: %f\n", comm);
+    fprintf(stderr, "Computation: %f\n", comp);
+    fprintf(stderr, "Total time: %f\n", comm + comp);
 
-    printf("KEY: ");
+    printf("\nKEY: ");
     print_block(key);
     printf("\n");
 

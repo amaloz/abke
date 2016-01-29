@@ -38,7 +38,7 @@ test_apse(void)
     struct apse_pk_t rpk;
     struct apse_sk_t rsk;
     int *attrs;
-    struct apse_ctxt_elem_t *ctxt;
+    struct apse_ctxt_t ctxt;
     element_t *inputs;
     element_t *ptxt;
 
@@ -48,6 +48,7 @@ test_apse(void)
     apse_sk_init(&pp, &sk);
     apse_pk_init(&pp, &rpk);
     apse_sk_init(&pp, &rsk);
+    apse_ctxt_init(&pp, &ctxt);
     attrs = calloc(pp.m, sizeof(int));
     ptxt = calloc(pp.m, sizeof(element_t));
     for (int i = 0; i < pp.m; ++i) {
@@ -56,12 +57,9 @@ test_apse(void)
         
     }
     inputs = calloc(2 * pp.m, sizeof(element_t));
-    ctxt = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
     for (int i = 0; i < 2 * pp.m; ++i) {
         element_init_G1(inputs[i], pp.pairing);
         element_random(inputs[i]);
-        element_init_G1(ctxt[i].ca, pp.pairing);
-        element_init_G1(ctxt[i].cb, pp.pairing);
     }
 
     apse_gen(&pp, &master, &pk, &sk, attrs);
@@ -70,8 +68,8 @@ test_apse(void)
         fprintf(stderr, "VERIFICATION FAILED\n");
         return -1;
     }
-    apse_enc(&pp, &rpk, ctxt, inputs, NULL);
-    apse_dec(&pp, &rsk, ptxt, ctxt, attrs);
+    apse_enc(&pp, &rpk, &ctxt, inputs, NULL);
+    apse_dec(&pp, &rsk, ptxt, &ctxt, attrs);
     for (int i = 0; i < pp.m; ++i) {
         element_printf("%B\n%B\n%B\n\n", inputs[2 * i], inputs[2 * i + 1], ptxt[i]);
     }
