@@ -1,5 +1,6 @@
 #include "apse.h"
 #include "net.h"
+#include "util.h"
 
 #include <assert.h>
 
@@ -296,13 +297,14 @@ apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk)
 {
     element_t tmp;
     int res = 0;
+    abke_time_t _start, _end;
+
+    _start = get_time();
 
     element_init_G1(tmp, pp->pairing);
 
-    if (!bls_verify(&mpk->gsig, pk->gsig, pk->g, pp->pairing)) {
-        printf("gsig failed\n");
+    if (!bls_verify(&mpk->gsig, pk->gsig, pk->g, pp->pairing))
         goto cleanup;
-    }
     if (!bls_verify(&mpk->hsig, pk->hsig, pk->h, pp->pairing))
         goto cleanup;
     if (!bls_verify(&mpk->usig, pk->usig, pk->u, pp->pairing))
@@ -316,6 +318,9 @@ apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk)
 
 cleanup:
     element_clear(tmp);
+
+    _end = get_time();
+    fprintf(stderr, "apse_vrfy: %f\n", _end - _start);
     return res;
 }
 
@@ -324,24 +329,29 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
          struct apse_ctxt_elem_t *ciphertext, element_t *plaintext,
          const unsigned int *seed)
 {
-    element_t s;
+    element_t s, t;
+    element_pp_t g_pp, h_pp;
 
     element_init_Zr(s, pp->pairing);
+    element_init_Zr(t, pp->pairing);
+    element_pp_init(g_pp, pk->g);
+    element_pp_init(h_pp, pk->h);
 
     if (seed) {
         pbc_random_set_deterministic(*seed);
     }
 
+    element_random(s);
+    element_random(t);
+
     for (int i = 0; i < pp->m; ++i) {
-        element_random(s);
-        element_pow_zn(ciphertext[2 * i].ca, pk->g, s);
+        element_pp_pow_zn(ciphertext[2 * i].ca, s, g_pp);
         element_pow_zn(ciphertext[2 * i].cb, pk->es[i], s);
         element_mul(ciphertext[2 * i].cb,
                     ciphertext[2 * i].cb, plaintext[2 * i]);
 
-        element_random(s);
-        element_pow_zn(ciphertext[2 * i + 1].ca, pk->h, s);
-        element_pow_zn(ciphertext[2 * i + 1].cb, pk->es[i], s);
+        element_pp_pow_zn(ciphertext[2 * i + 1].ca, t, h_pp);
+        element_pow_zn(ciphertext[2 * i + 1].cb, pk->es[i], t);
         element_mul(ciphertext[2 * i + 1].cb,
                     ciphertext[2 * i + 1].cb, plaintext[2 * i + 1]);
     }
@@ -351,15 +361,17 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
     }
 
     element_clear(s);
+    element_clear(t);
+    element_pp_clear(g_pp);
+    element_pp_clear(h_pp);
 }
 
 void
 apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
          struct apse_ctxt_elem_t *ciphertext, const int *attrs)
 {
+    struct apse_ctxt_elem_t *elem;
     for (int i = 0; i < pp->m; ++i) {
-        struct apse_ctxt_elem_t *elem;
-        assert(attrs[i] == 0 || attrs[i] == 1);
         elem = &ciphertext[2 * i + attrs[i]];
         element_pow_zn(plaintext[i], elem->ca, sk->rs[i]);
         element_div(plaintext[i], elem->cb, plaintext[i]);
@@ -384,10 +396,7 @@ apse_unlink(struct apse_pp_t *pp, struct apse_pk_t *rpk, struct apse_sk_t *rsk,
     for (int i = 0; i < pp->m; ++i) {
         element_pow_zn(rpk->es[i], pk->es[i], r);
         element_pow_zn(rpk->esigs[i], pk->esigs[i], r);
-    }
-
-    for (int i = 0; i < pp->m; ++i) {
-        element_mul(rsk->rs[i], sk->rs[i], r);
+        element_set(rsk->rs[i], sk->rs[i]);
     }
 
     element_clear(r);

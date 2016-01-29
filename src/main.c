@@ -57,8 +57,8 @@ go(struct args *args)
 static int
 test(struct args *args)
 {
-    test_AND_circuit(args->m);
-    /* test_apse(); */
+    /* test_AND_circuit(args->m); */
+    test_apse();
     return 0;
 }
 

@@ -198,8 +198,8 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     int fd = -1;
     struct apse_pp_t pp;
     struct apse_master_t mpk;
-    struct apse_pk_t pk, rpk;
-    struct apse_sk_t sk, rsk;
+    struct apse_pk_t pk;
+    struct apse_sk_t sk;
     block *input_labels;
     block key = zero_block();
 
@@ -217,8 +217,6 @@ client_go(const char *host, const char *port, const int *attrs, int m)
         apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &pk);
         apse_sk_init(&pp, &sk);
-        apse_pk_init(&pp, &rpk);
-        apse_sk_init(&pp, &rsk);
         ctxts = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(ctxts[i].ca, pp.pairing);
@@ -234,15 +232,6 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs);
     if (res == -1) goto cleanup;
 
-    _start = get_time();
-    {
-        /* XXX: doesn't work yet */
-        apse_unlink(&pp, &rpk, &rsk, &pk, &sk);
-    }
-    _end = get_time();
-    fprintf(stderr, "Randomize pk: %f\n", _end - _start);
-    total += _end - _start;
-
     /* Connect to server */
     if ((fd = net_init_client(host, port)) == -1) {
         perror("net_init_client");
@@ -251,7 +240,15 @@ client_go(const char *host, const char *port, const int *attrs, int m)
 
     _start = get_time();
     {
-        apse_pk_send(&pp, &pk, fd); /* XXX: should be rpk */
+        apse_unlink(&pp, &pk, &sk, &pk, &sk);
+    }
+    _end = get_time();
+    fprintf(stderr, "Randomize pk: %f\n", _end - _start);
+    total += _end - _start;
+
+    _start = get_time();
+    {
+        apse_pk_send(&pp, &pk, fd);
     }
     _end = get_time();
     fprintf(stderr, "Send pk: %f\n", _end - _start);
@@ -275,7 +272,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     {
         block output_label, r;
 
-        res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total); /* XXX: should be rsk */
+        res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total);
         if (res == -1) goto cleanup;
         res = _evaluate(&gc, input_labels, &output_label, &total);
         if (res == -1) goto cleanup;
@@ -323,11 +320,9 @@ cleanup:
         }
         free(ctxts);
 
-        apse_sk_clear(&pp, &rsk);
-        apse_pk_clear(&pp, &rpk);
+        apse_mpk_clear(&pp, &mpk);
         apse_sk_clear(&pp, &sk);
         apse_pk_clear(&pp, &pk);
-        apse_mpk_clear(&pp, &mpk);
         apse_pp_clear(&pp);
 
         if (gc_built)

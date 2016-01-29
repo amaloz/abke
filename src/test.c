@@ -66,10 +66,18 @@ test_apse(void)
 
     apse_gen(&pp, &master, &pk, &sk, attrs);
     apse_unlink(&pp, &rpk, &rsk, &pk, &sk);
-    apse_enc(&pp, &pk, ctxt, inputs, NULL);
-    apse_dec(&pp, &sk, ptxt, ctxt, attrs);
+    if (!apse_vrfy(&pp, &master, &rpk)) {
+        fprintf(stderr, "VERIFICATION FAILED\n");
+        return -1;
+    }
+    apse_enc(&pp, &rpk, ctxt, inputs, NULL);
+    apse_dec(&pp, &rsk, ptxt, ctxt, attrs);
     for (int i = 0; i < pp.m; ++i) {
         element_printf("%B\n%B\n%B\n\n", inputs[2 * i], inputs[2 * i + 1], ptxt[i]);
+    }
+    if (element_cmp(inputs[1], ptxt[0]) != 0) {
+        fprintf(stderr, "DECRYPTION FAILED!\n");
+        return -1;
     }
 
     return 0;
