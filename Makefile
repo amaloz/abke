@@ -10,7 +10,7 @@ INCLUDES := $(wildcard $(SRCDIR)/*.h)
 
 CC=gcc
 CFLAGS=-O3 -Wall -Isrc/ -I$(JUSTGARBLE)/include -maes -msse4 -march=native # -DPBC_DEBUG
-LIBS=-lmsgpackc -lm -lcrypto -lssl -lgmp -lpbc
+LIBS=-lmsgpackc -lm -lcrypto -lssl -lgmp -lpbc -lpthread
 
 all: main
 

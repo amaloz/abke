@@ -4,6 +4,12 @@
 #include "net.h"
 #include "util.h"
 
+#define THPOOL 1
+
+#ifdef THPOOL
+#include "thpool.h"
+#endif
+
 #include <assert.h>
 #include <unistd.h>
 #include <openssl/rand.h>
@@ -66,6 +72,28 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
     return 0;
 }
 
+struct thpool_args_t {
+    struct apse_pp_t *pp;
+    struct apse_master_t *mpk;
+    struct apse_pk_t *pk;
+    int result;
+};
+
+#ifdef THPOOL
+static threadpool g_thpool;
+static struct thpool_args_t g_thpool_args;
+
+static void *
+thpool_apse_vrfy(void *vargs)
+{
+    struct thpool_args_t *args = (struct thpool_args_t *) vargs;
+
+    args->result = apse_vrfy(args->pp, args->mpk, args->pk);
+
+    return NULL;
+}
+#endif
+
 static int
 _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
         int fd, abke_time_t *total)
@@ -74,10 +102,18 @@ _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
     _start = get_time();
     {
         apse_pk_recv(pp, pk, fd);
+#ifdef THPOOL
+        g_thpool_args.pp = pp;
+        g_thpool_args.mpk = mpk;
+        g_thpool_args.pk = pk;
+        g_thpool_args.result = 0;
+        thpool_add_work(g_thpool, thpool_apse_vrfy, &g_thpool_args);
+#else
         if (!apse_vrfy(pp, mpk, pk)) {
             fprintf(stderr, "pk fails to verify\n");
             return -1;
         }
+#endif
     }
     _end = get_time();
     fprintf(stderr, "Receive and verify public key: %f\n", _end - _start);
@@ -197,9 +233,19 @@ server_go(const char *host, const char *port, int m)
     abke_time_t _start, _end, total = 0.0;
     int res = -1;
 
+    fprintf(stderr, "Starting server with m = %d\n", m);
+#ifdef THPOOL
+    fprintf(stderr, "Using thread pool\n");
+#endif
+    fprintf(stderr, "\n");
+    
+
     /* Initialization */
     _start = get_time();
     {
+#ifdef THPOOL
+        g_thpool = thpool_init(2); /* XXX: hardcoded value */
+#endif
         gc_seed = seedRandom(NULL);
         apse_pp_init(&pp, m, PARAMFILE);
         apse_mpk_init(&pp, &mpk);
@@ -219,7 +265,7 @@ server_go(const char *host, const char *port, int m)
     _start = get_time();
     {
         for (int i = 0; i < 2 * pp.m; ++i) {
-            element_random(inputs[i]); /* XXX: slow! */
+            element_random(inputs[i]);
             input_labels[i] = element_to_block(inputs[i]);
         }
     }
@@ -246,6 +292,13 @@ server_go(const char *host, const char *port, int m)
     if (res == -1) goto cleanup;
     res = _encrypt(&pp, &client_pk, ctxts, inputs, &enc_seed, &total);
     if (res == -1) goto cleanup;
+#ifdef THPOOL
+    thpool_wait(g_thpool);
+    if (g_thpool_args.result != 1) {
+        fprintf(stderr, "CHEAT: public key failed to veify\n");
+        goto cleanup;
+    }
+#endif
 
     res = _send_ciphertext(&pp, ctxts, fd, &total);
     if (res == -1) goto cleanup;
@@ -257,7 +310,6 @@ server_go(const char *host, const char *port, int m)
     fprintf(stderr, "Send garbled circuit: %f\n", _end - _start);
     total += _end - _start;
 
-    /* Receive commitment from client */
     _start = get_time();
     {
         net_recv(fd, &commitment, sizeof commitment, 0);
@@ -269,17 +321,6 @@ server_go(const char *host, const char *port, int m)
     /* Send randomness and inputs to client */
     res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &total);
     if (res == -1) goto cleanup;
-    /* _start = get_time(); */
-    /* { */
-    /*     net_send(fd, &gc_seed, sizeof gc_seed, 0); */
-    /*     net_send(fd, &enc_seed, sizeof enc_seed, 0); */
-    /*     for (int i = 0; i < 2 * pp.m; ++i) { */
-    /*         net_send_element(fd, inputs[i]); */
-    /*     } */
-    /* } */
-    /* _end = get_time(); */
-    /* fprintf(stderr, "Send randomness and input labels: %f\n", _end - _start); */
-    /* total += _end - _start; */
 
     _start = get_time();
     {
@@ -322,6 +363,9 @@ server_go(const char *host, const char *port, int m)
 cleanup:
     _start = get_time();
     {
+#ifdef THPOOL
+        thpool_destroy(g_thpool);
+#endif
         for (int i = 0; i < 2 * m; ++i) {
             element_clear(inputs[i]);
             element_clear(ctxts[i].ca);
