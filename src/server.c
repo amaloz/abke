@@ -119,15 +119,14 @@ _send_ciphertext(const struct apse_pp_t *pp, struct apse_ctxt_elem_t *ctxts,
         unsigned char *buf;
 
         for (int i = 0; i < 2 * pp->m; ++i) {
-            length += element_length_in_bytes(ctxts[i].ca);
-            length += element_length_in_bytes(ctxts[i].cb);
+            length += element_length_in_bytes_compressed(ctxts[i].ca);
+            length += element_length_in_bytes_compressed(ctxts[i].cb);
         }
         if ((buf = malloc(length)) == NULL)
             return -1;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_to_bytes(buf + p, ctxts[i].ca);
-            p += element_to_bytes(buf + p, ctxts[i].cb);
-            element_printf("%B %B\n", ctxts[i].ca, ctxts[i].cb);
+            p += element_to_bytes_compressed(buf + p, ctxts[i].ca);
+            p += element_to_bytes_compressed(buf + p, ctxts[i].cb);
         }
         if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
             goto cleanup;
@@ -157,7 +156,7 @@ _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
         length += sizeof gc_seed;
         length += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            length += element_length_in_bytes(inputs[i]);
+            length += element_length_in_bytes_compressed(inputs[i]);
         }
         if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
             return -1;
@@ -168,7 +167,7 @@ _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
         memcpy(buf + p, &enc_seed, sizeof enc_seed);
         p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_to_bytes(buf + p, inputs[i]);
+            p += element_to_bytes_compressed(buf + p, inputs[i]);
         }
         res = net_send(fd, buf, length, 0);
         free(buf);

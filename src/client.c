@@ -69,9 +69,8 @@ _receive_ciphertext(const struct apse_pp_t *pp, struct apse_ctxt_elem_t *ctxts,
         if ((res = net_recv(fd, buf, length, 0)) == -1)
             goto cleanup;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_from_bytes(ctxts[i].ca, buf + p);
-            p += element_from_bytes(ctxts[i].cb, buf + p);
-            element_printf("%B %B\n", ctxts[i].ca, ctxts[i].cb);
+            p += element_from_bytes_compressed(ctxts[i].ca, buf + p);
+            p += element_from_bytes_compressed(ctxts[i].cb, buf + p);
         }
     cleanup:
         free(buf);
@@ -121,7 +120,7 @@ _evaluate(GarbledCircuit *gc, const block *input_labels, block *output_label,
         evaluate(gc, input_labels, output_label, GARBLE_TYPE_STANDARD);
     }
     _end = get_time();
-    fprintf(stderr, "Evaluate GC: %f\n", _end - _start);
+    fprintf(stderr, "Evaluate garbled circuit: %f\n", _end - _start);
     if (total)
         *total += _end - _start;
     return 0;
@@ -188,7 +187,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, GarbledCircuit *gc,
         memcpy(&enc_seed, buf + p, sizeof enc_seed);
         p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_from_bytes(claimed_inputs[i], buf + p);
+            p += element_from_bytes_compressed(claimed_inputs[i], buf + p);
             claimed_input_labels[i] = element_to_block(claimed_inputs[i]);
         }
 
@@ -306,10 +305,8 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     fprintf(stderr, "Receive garbled circuit: %f\n", _end - _start);
     total += _end - _start;
 
-
     res = _decrypt(&pp, &sk, ctxts, input_labels, attrs, &total);
     if (res == -1) goto cleanup;
-    
     res = _evaluate(&gc, input_labels, &output_label, &total);
     if (res == -1) goto cleanup;
     gc_built = 1;
