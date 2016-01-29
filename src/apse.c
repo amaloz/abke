@@ -56,6 +56,30 @@ apse_master_clear(const struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 void
+apse_mpk_init(struct apse_pp_t *pp, struct apse_master_t *master)
+{
+    bls_pk_init(&master->gsig, pp->pairing);
+    bls_pk_init(&master->hsig, pp->pairing);
+    bls_pk_init(&master->usig, pp->pairing);
+    master->jsigs = calloc(pp->m, sizeof(struct bls_t));
+    for (int i = 0; i < pp->m; ++i) {
+        bls_pk_init(&master->jsigs[i], pp->pairing);
+    }
+}
+
+void
+apse_mpk_clear(struct apse_pp_t *pp, struct apse_master_t *master)
+{
+    bls_pk_clear(&master->gsig);
+    bls_pk_clear(&master->hsig);
+    bls_pk_clear(&master->usig);
+    for (int i = 0; i < pp->m; ++i) {
+        bls_pk_clear(&master->jsigs[i]);
+    }
+    free(master->jsigs);
+}
+
+void
 apse_pk_init(struct apse_pp_t *pp, struct apse_pk_t *pk)
 {
     element_init_G1(pk->g, pp->pairing);
@@ -110,7 +134,7 @@ apse_sk_clear(const struct apse_pp_t *pp, struct apse_sk_t *sk)
 /* Send/receive functions */
 
 static void
-send_bls_pk(struct bls_t *bls, int fd)
+bls_pk_send(struct bls_t *bls, int fd)
 {
     net_send_element(fd, bls->g);
     net_send_element(fd, bls->h);
@@ -121,16 +145,16 @@ void
 apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master,
               int fd)
 {
-    send_bls_pk(&master->gsig, fd);
-    send_bls_pk(&master->hsig, fd);
-    send_bls_pk(&master->usig, fd);
+    bls_pk_send(&master->gsig, fd);
+    bls_pk_send(&master->hsig, fd);
+    bls_pk_send(&master->usig, fd);
     for (int i = 0; i < pp->m; ++i) {
-        send_bls_pk(&master->jsigs[i], fd);
+        bls_pk_send(&master->jsigs[i], fd);
     }
 }
 
 static void
-recv_bls_pk(struct bls_t *bls, int fd)
+bls_pk_recv(struct apse_pp_t *pp, struct bls_t *bls, int fd)
 {
     net_recv_element(fd, bls->g);
     net_recv_element(fd, bls->h);
@@ -138,13 +162,13 @@ recv_bls_pk(struct bls_t *bls, int fd)
 }
 
 void
-apse_mpk_recv(const struct apse_pp_t *pp, struct apse_master_t *master, int fd)
+apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd)
 {
-    recv_bls_pk(&master->gsig, fd);
-    recv_bls_pk(&master->hsig, fd);
-    recv_bls_pk(&master->usig, fd);
+    bls_pk_recv(pp, &master->gsig, fd);
+    bls_pk_recv(pp, &master->hsig, fd);
+    bls_pk_recv(pp, &master->usig, fd);
     for (int i = 0; i < pp->m; ++i) {
-        recv_bls_pk(&master->jsigs[i], fd);
+        bls_pk_recv(pp, &master->jsigs[i], fd);
     }
 }
 

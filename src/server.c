@@ -130,21 +130,29 @@ server_go(const char *host, const char *port, int m)
     {
         gc_seed = seedRandom(NULL);
         apse_pp_init(&pp, m, PARAMFILE);
-        apse_master_init(&pp, &mpk);
+        apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &client_pk);
         inputs = calloc(2 * pp.m, sizeof(element_t));
         input_labels = allocate_blocks(2 * pp.m);
         ctxts = calloc(2 * pp.m, sizeof(struct apse_ctxt_elem_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
-            element_random(inputs[i]);
-            input_labels[i] = element_to_block(inputs[i]);
             element_init_G1(ctxts[i].ca, pp.pairing);
             element_init_G1(ctxts[i].cb, pp.pairing);
         }
     }
     _end = get_time();
     fprintf(stderr, "Initialization: %f\n", _end - _start);
+
+    _start = get_time();
+    {
+        for (int i = 0; i < 2 * pp.m; ++i) {
+            element_random(inputs[i]); /* XXX: slow! */
+            input_labels[i] = element_to_block(inputs[i]);
+        }
+    }
+    _end = get_time();
+    fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
 
     res = _connect_to_ca(&pp, &mpk);
     if (res == -1) goto cleanup;
@@ -253,7 +261,7 @@ cleanup:
         free(input_labels);
 
         apse_pk_clear(&pp, &client_pk);
-        apse_master_clear(&pp, &mpk);
+        apse_mpk_clear(&pp, &mpk);
         apse_pp_clear(&pp);
 
         if (gc_built)

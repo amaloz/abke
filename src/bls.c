@@ -3,9 +3,7 @@
 int
 bls_init(struct bls_t *bls, pairing_t pairing)
 {
-    element_init_G2(bls->g, pairing);
-    element_init_G2(bls->pubkey, pairing);
-    element_init_G1(bls->h, pairing);
+    bls_pk_init(bls, pairing);
     element_init_Zr(bls->privkey, pairing);
 
     element_random(bls->g);
@@ -18,10 +16,25 @@ bls_init(struct bls_t *bls, pairing_t pairing)
 void
 bls_clear(struct bls_t *bls)
 {
+    bls_pk_clear(bls);
+    element_clear(bls->privkey);
+}
+
+int
+bls_pk_init(struct bls_t *bls, pairing_t pairing)
+{
+    element_init_G2(bls->g, pairing);
+    element_init_G2(bls->pubkey, pairing);
+    element_init_G1(bls->h, pairing);
+    return 0;
+}
+
+void
+bls_pk_clear(struct bls_t *bls)
+{
     element_clear(bls->g);
     element_clear(bls->h);
     element_clear(bls->pubkey);
-    element_clear(bls->privkey);
 }
 
 void

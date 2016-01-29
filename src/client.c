@@ -214,7 +214,7 @@ client_go(const char *host, const char *port, const int *attrs, int m)
     _start = get_time();
     {
         apse_pp_init(&pp, m, PARAMFILE);
-        apse_master_init(&pp, &mpk);
+        apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &pk);
         apse_sk_init(&pp, &sk);
         apse_pk_init(&pp, &rpk);
@@ -327,7 +327,7 @@ cleanup:
         apse_pk_clear(&pp, &rpk);
         apse_sk_clear(&pp, &sk);
         apse_pk_clear(&pp, &pk);
-        apse_master_clear(&pp, &mpk);
+        apse_mpk_clear(&pp, &mpk);
         apse_pp_clear(&pp);
 
         if (gc_built)

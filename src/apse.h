@@ -42,6 +42,11 @@ void
 apse_master_clear(const struct apse_pp_t *pp, struct apse_master_t *master);
 
 void
+apse_mpk_init(struct apse_pp_t *pp, struct apse_master_t *master);
+void
+apse_mpk_clear(struct apse_pp_t *pp, struct apse_master_t *master);
+
+void
 apse_pk_init(struct apse_pp_t *pp, struct apse_pk_t *pk);
 void
 apse_pk_clear(const struct apse_pp_t *pp, struct apse_pk_t *pk);
@@ -52,11 +57,10 @@ void
 apse_sk_clear(const struct apse_pp_t *pp, struct apse_sk_t *sk);
 
 
-
 void
 apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master, int fd);
 void
-apse_mpk_recv(const struct apse_pp_t *pp, struct apse_master_t *master, int fd);
+apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd);
 
 void
 apse_pk_send(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd);
