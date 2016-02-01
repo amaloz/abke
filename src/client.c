@@ -78,17 +78,17 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
 }
 
 static int
-_commit(block label, block *r, int fd, abke_time_t *comm, abke_time_t *comp)
+_commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 {
     block commitment;
     abke_time_t _start, _end;
 
     _start = get_time();
-    if (RAND_bytes((unsigned char *) r, sizeof(block)) == 0) {
+    if (RAND_bytes((unsigned char *) decom, sizeof(block)) == 0) {
         fprintf(stderr, "RAND_bytes failed\n");
         return -1;
     }
-    commitment = commit(label, *r);
+    commitment = commit(label, *decom);
     _end = get_time();
     fprintf(stderr, "Compute commitment: %f\n", _end - _start);
     if (comp)
@@ -160,7 +160,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
     for (int i = 0; i < 2 * pp->m; ++i) {
         p += element_from_bytes_(claimed_inputs[i], buf + p);
     }
-    
+
     for (int i = 0; i < pp->m; ++i) {
         block blk;
         AES_KEY key;
@@ -226,6 +226,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
     res = 0;
         
 cleanup:
+    free(buf);
     for (int i = 0; i < 2 * pp->m; ++i) {
         element_clear(claimed_inputs[i]);
     }
@@ -361,7 +362,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        block a, acom, b;
+        block a, acom, b = zero_block();
         if (RAND_bytes((unsigned char *) &b, sizeof b) == 0) {
             fprintf(stderr, "RAND_bytes failed\n");
             goto cleanup;
@@ -383,6 +384,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 cleanup:
     _start = get_time();
     {
+        free(input_labels);
         apse_ctxt_clear(&pp, &ctxt);
         apse_mpk_clear(&pp, &mpk);
         apse_sk_clear(&pp, &sk);

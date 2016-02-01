@@ -251,7 +251,8 @@ server_go(const char *host, const char *port, int m, const char *param)
     fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
     comp += _end - _start;
 
-    gc_seed = seedRandom(NULL);
+    (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
+    (void) seedRandom(&gc_seed);
     res = _garble(&pp, &egc.gc, input_labels, output_labels, &comp);
     if (res == -1) goto cleanup;
     gc_built = 1;
@@ -271,6 +272,7 @@ server_go(const char *host, const char *port, int m, const char *param)
 
     res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp);
     if (res == -1) goto cleanup;
+    (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp);
     if (res == -1) goto cleanup;
 #ifdef THPOOL
