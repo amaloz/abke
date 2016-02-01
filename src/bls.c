@@ -20,13 +20,12 @@ bls_clear(struct bls_t *bls)
     element_clear(bls->privkey);
 }
 
-int
+void
 bls_pk_init(struct bls_t *bls, pairing_t pairing)
 {
     element_init_G2(bls->g, pairing);
     element_init_G2(bls->pubkey, pairing);
     element_init_G1(bls->h, pairing);
-    return 0;
 }
 
 void

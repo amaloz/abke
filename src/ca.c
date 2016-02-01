@@ -79,11 +79,13 @@ ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, enum role_e role,
 }
 
 int
-ca_init(const char *host, const char *port, int m, const char *fname)
+ca_init(const char *host, const char *port, int m, const char *param)
 {
     int sockfd;
     struct apse_master_t master;
     struct apse_pp_t pp;
+
+    fprintf(stderr, "Starting CA with m = %d and pairing %s\n", m, param);
     
     if ((sockfd = net_init_server(host, port)) == -1) {
         perror("net_init_server");
@@ -92,7 +94,8 @@ ca_init(const char *host, const char *port, int m, const char *fname)
 
     (void) seedRandom(NULL);
 
-    apse_pp_init(&pp, m, fname);
+    if (apse_pp_init(&pp, m, param))
+        return -1;
     apse_master_init(&pp, &master);
 
     while (1) {

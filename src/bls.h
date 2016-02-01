@@ -12,7 +12,7 @@ int
 bls_init(struct bls_t *bls, pairing_t pairing);
 void
 bls_clear(struct bls_t *bls);
-int
+void
 bls_pk_init(struct bls_t *bls, pairing_t pairing);
 void
 bls_pk_clear(struct bls_t *bls);

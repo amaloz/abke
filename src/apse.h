@@ -32,7 +32,7 @@ struct apse_ctxt_t {
     element_t *c2s;
 };
 
-void
+int
 apse_pp_init(struct apse_pp_t *pp, int m, const char *fname);
 void
 apse_pp_clear(struct apse_pp_t *pp);
@@ -63,9 +63,9 @@ void
 apse_ctxt_clear(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt);
 
 
-void
+int
 apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master, int fd);
-void
+int
 apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd);
 
 int
@@ -101,6 +101,10 @@ void
 apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
          struct apse_ctxt_t *ciphertext, element_t *plaintext,
          const unsigned int *seed);
+void
+apse_enc_select(struct apse_pp_t *pp, struct apse_pk_t *pk, const int *attrs,
+                struct apse_ctxt_t *ciphertext, element_t *plaintext,
+                const unsigned int *seed);
 void
 apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
          struct apse_ctxt_t *ciphertext, const int *attrs);

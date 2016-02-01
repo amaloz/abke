@@ -35,9 +35,9 @@ element_to_block(element_t elem)
     unsigned char *buf;
     block out;
 
-    length = element_length_in_bytes(elem);
+    length = element_length_in_bytes_(elem);
     buf = malloc(length);
-    (void) element_to_bytes(buf, elem);
+    (void) element_to_bytes_(buf, elem);
     sha1_hash((char *) &out, sizeof out, buf, length);
     free(buf);
     return out;

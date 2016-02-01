@@ -4,6 +4,6 @@
 int
 test_apse(void);
 int
-test_AND_circuit(int m);
+test_AND_circuit(const int *attrs, int n);
 
 #endif

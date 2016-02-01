@@ -4,13 +4,6 @@
 #include <netinet/in.h>
 #include <pbc/pbc.h>
 
-#define BACKLOG 5
-
-int
-net_send_element(int socket, element_t elem);
-int
-net_recv_element(int socket, element_t elem);
-
 int
 net_send(int socket, const void *buffer, size_t length, int flags);
 

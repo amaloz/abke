@@ -1,4 +1,5 @@
 #include "net.h"
+#include "util.h"
 
 #include <netdb.h>
 #include <stdio.h>
@@ -9,39 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-int
-net_send_element(int socket, element_t elem)
-{
-    int length, res = 0;
-    unsigned char *buf;
-
-    length = element_length_in_bytes(elem);
-    buf = malloc(length);
-    (void) element_to_bytes(buf, elem);
-    if ((res = net_send(socket, &length, sizeof length, 0)) == -1)
-        goto cleanup;
-    res = net_send(socket, buf, length, 0);
-cleanup:
-    free(buf);
-    return res;
-}
-
-int
-net_recv_element(int socket, element_t elem)
-{
-    int length, res = 0;
-    unsigned char *buf;
-
-    if ((res = net_recv(socket, &length, sizeof length, 0)) == -1)
-        return -1;
-    buf = malloc(length);
-    if ((res = net_recv(socket, buf, length, 0)) == -1)
-        goto cleanup;
-    (void) element_from_bytes(elem, buf);
-cleanup:
-    free(buf);
-    return res;
-}
+#define BACKLOG 5
 
 int
 net_send(int socket, const void *buffer, size_t length, int flags)

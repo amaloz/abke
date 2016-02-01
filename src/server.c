@@ -1,5 +1,6 @@
 #include "apse.h"
 #include "ca.h"
+#include "gc.h"
 #include "gc_comm.h"
 #include "net.h"
 #include "util.h"
@@ -13,31 +14,8 @@
 #include <assert.h>
 #include <unistd.h>
 #include <openssl/rand.h>
-#include "garble.h"
-#include "circuits.h"
-#include "gates.h"
 
-static void
-build_AND_circuit(GarbledCircuit *gc, int n)
-{
-    block inputLabels[2 * n];
-    block outputLabels[n];
-    GarblingContext ctxt;
-    int wire;
-    int wires[n];
-    int q = n - 1;
-    int r = n + q;
-
-    countToN(wires, n);
-
-    createInputLabels(inputLabels, n);
-    createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
-    startBuilding(gc, &ctxt);
-
-    ANDCircuit(gc, &ctxt, n, wires, &wire);
-
-    finishBuilding(gc, &ctxt, outputLabels, wires);
-}
+#include "policies.h"
 
 static int
 _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
@@ -62,7 +40,7 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
     abke_time_t _start, _end;
     _start = get_time();
     {
-        build_AND_circuit(gc, pp->m);
+        build_AND_policy(gc, pp->m);
         garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
     }
     _end = get_time();
@@ -71,6 +49,8 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
         *total += _end - _start;
     return 0;
 }
+
+
 
 struct thpool_args_t {
     struct apse_pp_t *pp;
@@ -163,9 +143,9 @@ _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
         length += sizeof gc_seed;
         length += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            length += element_length_in_bytes_compressed(inputs[i]);
+            length += element_length_in_bytes_(inputs[i]);
         }
-        if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+        if (net_send(fd, &length, sizeof length, 0) == -1)
             return -1;
         if ((buf = malloc(length)) == NULL)
             return -1;
@@ -174,7 +154,7 @@ _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
         memcpy(buf + p, &enc_seed, sizeof enc_seed);
         p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_to_bytes_compressed(buf + p, inputs[i]);
+            p += element_to_bytes_(buf + p, inputs[i]);
         }
         res = net_send(fd, buf, length, 0);
         free(buf);
@@ -188,7 +168,7 @@ _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
 
 
 int
-server_go(const char *host, const char *port, int m)
+server_go(const char *host, const char *port, int m, const char *param)
 {
     int sockfd = -1, fd = -1;
     block gc_seed, commitment;
@@ -196,15 +176,16 @@ server_go(const char *host, const char *port, int m)
     struct apse_master_t mpk;
     struct apse_pk_t client_pk;
     struct apse_ctxt_t ctxt;
-    GarbledCircuit gc;
+    ExtGarbledCircuit egc;
     int gc_built = 0;
     element_t *inputs;
-    block *input_labels, output_labels[2], key = zero_block();
+    block *input_labels, output_labels[2];
+    block key = zero_block();
     unsigned int enc_seed;
     abke_time_t _start, _end, comm = 0.0, comp = 0.0;
     int res = -1;
 
-    fprintf(stderr, "Starting server with m = %d\n", m);
+    fprintf(stderr, "Starting server with m = %d and pairing %s\n", m, param);
 #ifdef THPOOL
     fprintf(stderr, "Using thread pool\n");
 #endif
@@ -217,8 +198,8 @@ server_go(const char *host, const char *port, int m)
 #ifdef THPOOL
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
-        gc_seed = seedRandom(NULL);
-        apse_pp_init(&pp, m, PARAMFILE);
+
+        apse_pp_init(&pp, m, param);
         apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &client_pk);
         apse_ctxt_init(&pp, &ctxt);
@@ -226,7 +207,9 @@ server_go(const char *host, const char *port, int m)
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
         }
+        egc.translations = calloc(2 * pp.m, sizeof(translation_t));
         input_labels = allocate_blocks(2 * pp.m);
+        createInputLabels(input_labels, pp.m);
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
@@ -234,20 +217,45 @@ server_go(const char *host, const char *port, int m)
 
     _start = get_time();
     {
-        for (int i = 0; i < 2 * pp.m; ++i) {
-            element_random(inputs[i]);
-            input_labels[i] = element_to_block(inputs[i]);
+        AES_KEY key;
+        block *translation;
+        block blk;
+        for (int i = 0; i < pp.m; ++i) {
+            element_random(inputs[2 * i]);
+            element_random(inputs[2 * i + 1]);
+            /* if (rand() % 2) { */
+            /*     translation = egc.translations[2 * i].map; */
+            /*     translation[0] = element_to_block(inputs[2 * i + 1]); */
+            /*     AES_set_encrypt_key((unsigned char *) &input_labels[2 * i + 1], 128, &key); */
+            /*     AES_ecb_encrypt_blks(translation, 2, &key); */
+            /*     translation = egc.translations[2 * i + 1].map; */
+            /*     translation[0] = element_to_block(inputs[2 * i]); */
+            /*     AES_set_encrypt_key((unsigned char *) &input_labels[2 * i], 128, &key); */
+            /*     AES_ecb_encrypt_blks(translation, 2, &key); */
+            /* } else { */
+            blk = element_to_block(inputs[2 * i]);
+            translation = egc.translations[2 * i].map;
+            translation[0] = input_labels[2 * i];
+            AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
+            AES_ecb_encrypt_blks(translation, 2, &key);
+            blk = element_to_block(inputs[2 * i + 1]);
+            translation = egc.translations[2 * i + 1].map;
+            translation[0] = input_labels[2 * i + 1];
+            AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
+            AES_ecb_encrypt_blks(translation, 2, &key);
         }
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
     comp += _end - _start;
 
-    res = _connect_to_ca(&pp, &mpk);
-    if (res == -1) goto cleanup;
-    res = _garble(&pp, &gc, input_labels, output_labels, &comp);
+    gc_seed = seedRandom(NULL);
+    res = _garble(&pp, &egc.gc, input_labels, output_labels, &comp);
     if (res == -1) goto cleanup;
     gc_built = 1;
+
+    res = _connect_to_ca(&pp, &mpk);
+    if (res == -1) goto cleanup;
 
     /* Initialize server and accept connection from client */
     if ((sockfd = net_init_server(host, port)) == -1) {
@@ -273,7 +281,8 @@ server_go(const char *host, const char *port, int m)
 
     _start = get_time();
     {
-        apse_ctxt_send(&pp, &ctxt, fd);
+        if (apse_ctxt_send(&pp, &ctxt, fd) == -1)
+            goto cleanup;
     }
     _end = get_time();
     fprintf(stderr, "Send ciphertext: %f\n", _end - _start);
@@ -281,7 +290,8 @@ server_go(const char *host, const char *port, int m)
 
     _start = get_time();
     {
-        gc_comm_send(fd, &gc);
+        if (gc_comm_send(fd, &egc) == -1)
+            goto cleanup;
     }
     _end = get_time();
     fprintf(stderr, "Send garbled circuit: %f\n", _end - _start);
@@ -289,7 +299,8 @@ server_go(const char *host, const char *port, int m)
 
     _start = get_time();
     {
-        net_recv(fd, &commitment, sizeof commitment, 0);
+        if (net_recv(fd, &commitment, sizeof commitment, 0) == -1)
+            goto cleanup;
     }
     _end = get_time();
     fprintf(stderr, "Receive commitment: %f\n", _end - _start);
@@ -298,7 +309,6 @@ server_go(const char *host, const char *port, int m)
     /* Send randomness and inputs to client */
     res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &comm);
     if (res == -1) goto cleanup;
-
 
     {
         block output_label, r, commitment2;
@@ -369,7 +379,8 @@ cleanup:
         apse_pp_clear(&pp);
 
         if (gc_built)
-            removeGarbledCircuit(&gc);
+            removeGarbledCircuit(&egc.gc);
+        free(egc.translations);
 
         if (fd != -1)
             close(fd);

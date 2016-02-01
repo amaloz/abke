@@ -6,13 +6,15 @@
 #include <pbc/pbc_test.h>
 #include "justGarble.h"
 
-#define PARAMFILE "a.param"
-
 #define CA_HOST "127.0.0.1"
 #define CA_PORT "8000"
 
 block
 element_to_block(element_t elem);
+
+#define element_length_in_bytes_ element_length_in_bytes
+#define element_to_bytes_ element_to_bytes
+#define element_from_bytes_ element_from_bytes
 
 block
 commit(block in, block r);

@@ -4,29 +4,12 @@
 #include "util.h"
 
 #include <openssl/rand.h>
+#include "policies.h"
+
+#include "garble.h"
 #include "circuits.h"
+#include "gates.h"
 
-static void
-build_AND_circuit(GarbledCircuit *gc, int n)
-{
-    block inputLabels[2 * n];
-    block outputLabels[n];
-    GarblingContext ctxt;
-    int wire;
-    int wires[n];
-    int q = n - 1;
-    int r = n + q;
-
-    countToN(wires, n);
-
-    createInputLabels(inputLabels, n);
-    createEmptyGarbledCircuit(gc, n, 1, q, r, inputLabels);
-    startBuilding(gc, &ctxt);
-
-    ANDCircuit(gc, &ctxt, n, wires, &wire);
-
-    finishBuilding(gc, &ctxt, outputLabels, wires);
-}
 
 int
 test_apse(void)
@@ -42,7 +25,7 @@ test_apse(void)
     element_t *inputs;
     element_t *ptxt;
 
-    apse_pp_init(&pp, 1, PARAMFILE);
+    apse_pp_init(&pp, 1, "a.param");
     apse_master_init(&pp, &master);
     apse_pk_init(&pp, &pk);
     apse_sk_init(&pp, &sk);
@@ -82,20 +65,24 @@ test_apse(void)
 }
 
 int
-test_AND_circuit(int m)
+test_AND_circuit(const int *attrs, int n)
 {
     GarbledCircuit gc;
     block *inputs, *extracted, outputs[2], output;
 
-    inputs = allocate_blocks(2 * m);
-    extracted = allocate_blocks(m);
-    for(int i = 0; i < 2 * m; ++i) {
+    inputs = allocate_blocks(2 * n);
+    createInputLabels(inputs, n);
+    extracted = allocate_blocks(n);
+    for(int i = 0; i < 2 * n; ++i) {
         RAND_bytes((unsigned char *) &inputs[i], sizeof(block));
     }
-    for (int i = 0; i < m; ++i) {
-        extracted[i] = inputs[2 * i];
+    printf("Input:");
+    for (int i = 0; i < n; ++i) {
+        printf("%d", attrs[i]);
+        extracted[i] = inputs[2 * i + attrs[i]];
     }
-    build_AND_circuit(&gc, m);
+    printf("\n");
+    build_AND_policy(&gc, n);
     garbleCircuit(&gc, inputs, outputs, GARBLE_TYPE_STANDARD);
     print_block(outputs[0]);
     printf(" ");
@@ -104,5 +91,8 @@ test_AND_circuit(int m)
     evaluate(&gc, extracted, &output, GARBLE_TYPE_STANDARD);
     print_block(output);
     printf("\n");
+
+    free(inputs);
+    free(extracted);
     return 0;
 }

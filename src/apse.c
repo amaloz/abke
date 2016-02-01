@@ -1,14 +1,28 @@
 #include "apse.h"
 #include "net.h"
+#include "util.h"
 
 #include <assert.h>
+#include <sys/stat.h>
 
-void
+static size_t
+filesize(const char *fname)
+{
+	struct stat st;
+
+	if (stat(fname, &st) == 0)
+		return st.st_size;
+
+	return -1;
+}
+
+int
 apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
 {
-    char param[1024];
-    size_t count;
+    char *param;
+    size_t count, fsize;
     FILE *f;
+    int res;
 
     pp->m = m;
 
@@ -16,13 +30,19 @@ apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
         pbc_die("fopen");
     }
 
-    count = fread(param, sizeof(char), 1024, f);
+    fsize = filesize(fname);
+    param = malloc(fsize);
+
+    count = fread(param, sizeof(char), fsize, f);
     if (!count) {
         pbc_die("fread");
     }
-    (void) pairing_init_set_buf(pp->pairing, param, count);
+    res = pairing_init_set_buf(pp->pairing, param, count);
 
+    free(param);
     fclose(f);
+
+    return res;
 }
 
 void
@@ -155,43 +175,83 @@ apse_ctxt_clear(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
 
 /* Send/receive functions */
 
-static void
-bls_pk_send(struct bls_t *bls, int fd)
-{
-    net_send_element(fd, bls->g);
-    net_send_element(fd, bls->h);
-    net_send_element(fd, bls->pubkey);
-}
-
-void
+int
 apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master,
               int fd)
 {
-    bls_pk_send(&master->gsig, fd);
-    bls_pk_send(&master->hsig, fd);
-    bls_pk_send(&master->usig, fd);
+    size_t length = 0, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    length += element_length_in_bytes_(master->gsig.g);
+    length += element_length_in_bytes_(master->gsig.h);
+    length += element_length_in_bytes_(master->gsig.pubkey);
+    length += element_length_in_bytes_(master->hsig.g);
+    length += element_length_in_bytes_(master->hsig.h);
+    length += element_length_in_bytes_(master->hsig.pubkey);
+    length += element_length_in_bytes_(master->usig.g);
+    length += element_length_in_bytes_(master->usig.h);
+    length += element_length_in_bytes_(master->usig.pubkey);
     for (int i = 0; i < pp->m; ++i) {
-        bls_pk_send(&master->jsigs[i], fd);
+        length += element_length_in_bytes_(master->jsigs[i].g);
+        length += element_length_in_bytes_(master->jsigs[i].h);
+        length += element_length_in_bytes_(master->jsigs[i].pubkey);
+        
     }
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    p += element_to_bytes_(buf + p, master->gsig.g);
+    p += element_to_bytes_(buf + p, master->gsig.h);
+    p += element_to_bytes_(buf + p, master->gsig.pubkey);
+    p += element_to_bytes_(buf + p, master->hsig.g);
+    p += element_to_bytes_(buf + p, master->hsig.h);
+    p += element_to_bytes_(buf + p, master->hsig.pubkey);
+    p += element_to_bytes_(buf + p, master->usig.g);
+    p += element_to_bytes_(buf + p, master->usig.h);
+    p += element_to_bytes_(buf + p, master->usig.pubkey);
+    for (int i = 0; i < pp->m; ++i) {
+        p += element_to_bytes_(buf + p, master->jsigs[i].g);
+        p += element_to_bytes_(buf + p, master->jsigs[i].h);
+        p += element_to_bytes_(buf + p, master->jsigs[i].pubkey);
+    }
+    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
+        goto cleanup;
+    res = net_send(fd, buf, length, 0);
+cleanup:
+    free(buf);
+    return res;
 }
 
-static void
-bls_pk_recv(struct apse_pp_t *pp, struct bls_t *bls, int fd)
-{
-    net_recv_element(fd, bls->g);
-    net_recv_element(fd, bls->h);
-    net_recv_element(fd, bls->pubkey);
-}
-
-void
+int 
 apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd)
 {
-    bls_pk_recv(pp, &master->gsig, fd);
-    bls_pk_recv(pp, &master->hsig, fd);
-    bls_pk_recv(pp, &master->usig, fd);
+    size_t length, p = 0;
+    unsigned char *buf;
+    int res = 0;
+
+    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
+        return -1;
+    if ((buf = malloc(length)) == NULL)
+        return -1;
+    if ((res = net_recv(fd, buf, length, 0)) == -1)
+        goto cleanup;
+    p += element_from_bytes_(master->gsig.g, buf + p);
+    p += element_from_bytes_(master->gsig.h, buf + p);
+    p += element_from_bytes_(master->gsig.pubkey, buf + p);
+    p += element_from_bytes_(master->hsig.g, buf + p);
+    p += element_from_bytes_(master->hsig.h, buf + p);
+    p += element_from_bytes_(master->hsig.pubkey, buf + p);
+    p += element_from_bytes_(master->usig.g, buf + p);
+    p += element_from_bytes_(master->usig.h, buf + p);
+    p += element_from_bytes_(master->usig.pubkey, buf + p);
     for (int i = 0; i < pp->m; ++i) {
-        bls_pk_recv(pp, &master->jsigs[i], fd);
+        p += element_from_bytes_(master->jsigs[i].g, buf + p);
+        p += element_from_bytes_(master->jsigs[i].h, buf + p);
+        p += element_from_bytes_(master->jsigs[i].pubkey, buf + p);
     }
+cleanup:
+    free(buf);
+    return res;
 }
 
 int
@@ -201,29 +261,29 @@ apse_pk_send(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
     unsigned char *buf;
     int res = 0;
 
-    length += element_length_in_bytes(pk->g);
-    length += element_length_in_bytes(pk->h);
-    length += element_length_in_bytes(pk->u);
-    length += element_length_in_bytes(pk->gsig);
-    length += element_length_in_bytes(pk->hsig);
-    length += element_length_in_bytes(pk->usig);
+    length += element_length_in_bytes_(pk->g);
+    length += element_length_in_bytes_(pk->h);
+    length += element_length_in_bytes_(pk->u);
+    length += element_length_in_bytes_(pk->gsig);
+    length += element_length_in_bytes_(pk->hsig);
+    length += element_length_in_bytes_(pk->usig);
     for (int i = 0; i < pp->m; ++i) {
-        length += element_length_in_bytes(pk->es[i]);
-        length += element_length_in_bytes(pk->esigs[i]);
+        length += element_length_in_bytes_(pk->es[i]);
+        length += element_length_in_bytes_(pk->esigs[i]);
     }
     if ((buf = malloc(length)) == NULL)
         return -1;
-    p += element_to_bytes(buf + p, pk->g);
-    p += element_to_bytes(buf + p, pk->h);
-    p += element_to_bytes(buf + p, pk->u);
-    p += element_to_bytes(buf + p, pk->gsig);
-    p += element_to_bytes(buf + p, pk->hsig);
-    p += element_to_bytes(buf + p, pk->usig);
+    p += element_to_bytes_(buf + p, pk->g);
+    p += element_to_bytes_(buf + p, pk->h);
+    p += element_to_bytes_(buf + p, pk->u);
+    p += element_to_bytes_(buf + p, pk->gsig);
+    p += element_to_bytes_(buf + p, pk->hsig);
+    p += element_to_bytes_(buf + p, pk->usig);
     for (int i = 0; i < pp->m; ++i) {
-        p += element_to_bytes(buf + p, pk->es[i]);
+        p += element_to_bytes_(buf + p, pk->es[i]);
     }
     for (int i = 0; i < pp->m; ++i) {
-        p += element_to_bytes(buf + p, pk->esigs[i]);
+        p += element_to_bytes_(buf + p, pk->esigs[i]);
     }
     if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
         goto cleanup;
@@ -246,17 +306,17 @@ apse_pk_recv(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
         return -1;
     if ((res = net_recv(fd, buf, length, 0)) == -1)
         goto cleanup;
-    p += element_from_bytes(pk->g, buf + p);
-    p += element_from_bytes(pk->h, buf + p);
-    p += element_from_bytes(pk->u, buf + p);
-    p += element_from_bytes(pk->gsig, buf + p);
-    p += element_from_bytes(pk->hsig, buf + p);
-    p += element_from_bytes(pk->usig, buf + p);
+    p += element_from_bytes_(pk->g, buf + p);
+    p += element_from_bytes_(pk->h, buf + p);
+    p += element_from_bytes_(pk->u, buf + p);
+    p += element_from_bytes_(pk->gsig, buf + p);
+    p += element_from_bytes_(pk->hsig, buf + p);
+    p += element_from_bytes_(pk->usig, buf + p);
     for (int i = 0; i < pp->m; ++i) {
-        p += element_from_bytes(pk->es[i], buf + p);
+        p += element_from_bytes_(pk->es[i], buf + p);
     }
     for (int i = 0; i < pp->m; ++i) {
-        p += element_from_bytes(pk->esigs[i], buf + p);
+        p += element_from_bytes_(pk->esigs[i], buf + p);
     }
 
 cleanup:
@@ -272,12 +332,12 @@ apse_sk_send(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
     int res = 0;
 
     for (int i = 0; i < pp->m; ++i) {
-        length += element_length_in_bytes(sk->rs[i]);
+        length += element_length_in_bytes_(sk->rs[i]);
     }
     if ((buf = malloc(length)) == NULL)
         return -1;
     for (int i = 0; i < pp->m; ++i) {
-        p += element_to_bytes(buf + p, sk->rs[i]);
+        p += element_to_bytes_(buf + p, sk->rs[i]);
     }
     if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
         goto cleanup;
@@ -302,7 +362,7 @@ apse_sk_recv(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
         goto cleanup;
 
     for (int i = 0; i < pp->m; ++i) {
-        p += element_from_bytes(sk->rs[i], buf + p);
+        p += element_from_bytes_(sk->rs[i], buf + p);
     }
 cleanup:
     free(buf);
@@ -316,17 +376,17 @@ apse_ctxt_send(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
     unsigned char *buf;
     int res = 0;
 
-    length += element_length_in_bytes(ctxt->g);
-    length += element_length_in_bytes(ctxt->h);
+    length += element_length_in_bytes_(ctxt->g);
+    length += element_length_in_bytes_(ctxt->h);
     for (int i = 0; i < 2 * pp->m; ++i) {
-        length += element_length_in_bytes(ctxt->c2s[i]);
+        length += element_length_in_bytes_(ctxt->c2s[i]);
     }
     if ((buf = malloc(length)) == NULL)
         return -1;
-    p += element_to_bytes(buf + p, ctxt->g);
-    p += element_to_bytes(buf + p, ctxt->h);
+    p += element_to_bytes_(buf + p, ctxt->g);
+    p += element_to_bytes_(buf + p, ctxt->h);
     for (int i = 0; i < 2 * pp->m; ++i) {
-        p += element_to_bytes(buf + p, ctxt->c2s[i]);
+        p += element_to_bytes_(buf + p, ctxt->c2s[i]);
     }
     if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
         goto cleanup;
@@ -350,10 +410,10 @@ apse_ctxt_recv(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
     if ((res = net_recv(fd, buf, length, 0)) == -1)
         goto cleanup;
 
-    p += element_from_bytes(ctxt->g, buf + p);
-    p += element_from_bytes(ctxt->h, buf + p);
+    p += element_from_bytes_(ctxt->g, buf + p);
+    p += element_from_bytes_(ctxt->h, buf + p);
     for (int i = 0; i < 2 * pp->m; ++i) {
-        p += element_from_bytes(ctxt->c2s[i], buf + p);
+        p += element_from_bytes_(ctxt->c2s[i], buf + p);
     }
 cleanup:
     free(buf);
@@ -486,6 +546,50 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
         element_pow_zn(ciphertext->c2s[2 * i + 1], pk->es[i], t);
         element_mul(ciphertext->c2s[2 * i + 1],
                     ciphertext->c2s[2 * i + 1], plaintext[2 * i + 1]);
+    }
+
+    if (seed) {
+        pbc_random_set_file("/dev/urandom");
+    }
+
+    element_clear(s);
+    element_clear(t);
+    element_pp_clear(g_pp);
+    element_pp_clear(h_pp);
+}
+
+void
+apse_enc_select(struct apse_pp_t *pp, struct apse_pk_t *pk, const int *attrs,
+                struct apse_ctxt_t *ciphertext, element_t *plaintext,
+                const unsigned int *seed)
+{
+    element_t s, t;
+    element_pp_t g_pp, h_pp;
+
+    element_init_Zr(s, pp->pairing);
+    element_init_Zr(t, pp->pairing);
+    element_pp_init(g_pp, pk->g);
+    element_pp_init(h_pp, pk->h);
+
+    if (seed) {
+        pbc_random_set_deterministic(*seed);
+    }
+
+    element_random(s);
+    element_random(t);
+    element_pp_pow_zn(ciphertext->g, s, g_pp);
+    element_pp_pow_zn(ciphertext->h, t, h_pp);
+
+    for (int i = 0; i < pp->m; ++i) {
+        if (attrs[i]) {
+            element_pow_zn(ciphertext->c2s[2 * i + 1], pk->es[i], t);
+            element_mul(ciphertext->c2s[2 * i + 1],
+                        ciphertext->c2s[2 * i + 1], plaintext[2 * i + 1]);
+        } else {
+            element_pow_zn(ciphertext->c2s[2 * i], pk->es[i], s);
+            element_mul(ciphertext->c2s[2 * i],
+                        ciphertext->c2s[2 * i], plaintext[2 * i]);
+        }
     }
 
     if (seed) {
