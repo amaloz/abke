@@ -130,8 +130,8 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
 
 static int
 _send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
-                            unsigned int enc_seed, element_t *inputs, int fd,
-                            abke_time_t *total)
+                            unsigned int enc_seed, element_t *inputs,
+                            int fd, abke_time_t *total)
 {
     int res = 0;
     abke_time_t _start, _end;
@@ -190,7 +190,6 @@ server_go(const char *host, const char *port, int m, const char *param)
     fprintf(stderr, "Using thread pool\n");
 #endif
     fprintf(stderr, "\n");
-    
 
     /* Initialization */
     _start = get_time();
@@ -209,6 +208,7 @@ server_go(const char *host, const char *port, int m, const char *param)
         }
         egc.translations = calloc(2 * pp.m, sizeof(translation_t));
         input_labels = allocate_blocks(2 * pp.m);
+        (void) seedRandom(NULL); /* Need this for createInputLabels() */
         createInputLabels(input_labels, pp.m);
     }
     _end = get_time();
@@ -218,31 +218,28 @@ server_go(const char *host, const char *port, int m, const char *param)
     _start = get_time();
     {
         AES_KEY key;
-        block *translation;
+        block *map;
         block blk;
         for (int i = 0; i < pp.m; ++i) {
+            bool choice = rand() % 2;   /* XXX: not secure */
             element_random(inputs[2 * i]);
             element_random(inputs[2 * i + 1]);
-            /* if (rand() % 2) { */
-            /*     translation = egc.translations[2 * i].map; */
-            /*     translation[0] = element_to_block(inputs[2 * i + 1]); */
-            /*     AES_set_encrypt_key((unsigned char *) &input_labels[2 * i + 1], 128, &key); */
-            /*     AES_ecb_encrypt_blks(translation, 2, &key); */
-            /*     translation = egc.translations[2 * i + 1].map; */
-            /*     translation[0] = element_to_block(inputs[2 * i]); */
-            /*     AES_set_encrypt_key((unsigned char *) &input_labels[2 * i], 128, &key); */
-            /*     AES_ecb_encrypt_blks(translation, 2, &key); */
-            /* } else { */
-            blk = element_to_block(inputs[2 * i]);
-            translation = egc.translations[2 * i].map;
-            translation[0] = input_labels[2 * i];
+
+            blk = element_to_block(inputs[2 * i + (choice ? 1 : 0)]);
+            map = egc.translations[2 * i].map;
+            map[0] = input_labels[2 * i + (choice ? 1 : 0)];
+            map[1] = zero_block();
+
             AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
-            AES_ecb_encrypt_blks(translation, 2, &key);
-            blk = element_to_block(inputs[2 * i + 1]);
-            translation = egc.translations[2 * i + 1].map;
-            translation[0] = input_labels[2 * i + 1];
+            AES_ecb_encrypt_blks(map, 2, &key);
+
+            blk = element_to_block(inputs[2 * i + (choice ? 0 : 1)]);
+            map = egc.translations[2 * i + 1].map;
+            map[0] = input_labels[2 * i + (choice ? 0 : 1)];
+            map[1] = zero_block();
+
             AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
-            AES_ecb_encrypt_blks(translation, 2, &key);
+            AES_ecb_encrypt_blks(map, 2, &key);
         }
     }
     _end = get_time();
@@ -307,7 +304,8 @@ server_go(const char *host, const char *port, int m, const char *param)
     comm += _end - _start;
 
     /* Send randomness and inputs to client */
-    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &comm);
+    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd,
+                                      &comm);
     if (res == -1) goto cleanup;
 
     {
