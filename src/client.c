@@ -59,10 +59,13 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
             } else {
                 memcpy(&trans, &translations[2 * i + 1], sizeof(translation_t));
                 AES_ecb_decrypt_blks(trans.map, 2, &key);
-
-                assert(equal_blocks(trans.map[1], zero_block()));
+                /* If blocks unequal can't check here as that leads to selective
+                 * failure attack */
                 input_labels[i] = trans.map[0];
             }
+
+        }
+        for (int i = 0; i < pp->m; ++i) {
             element_clear(inputs[i]);
         }
         free(inputs);
@@ -278,7 +281,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         apse_sk_init(&pp, &sk);
         apse_ctxt_init(&pp, &ctxt);
         input_labels = allocate_blocks(pp.m);
-
+        egc.translations = NULL;
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);

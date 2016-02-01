@@ -220,8 +220,12 @@ server_go(const char *host, const char *port, int m, const char *param)
         AES_KEY key;
         block *map;
         block blk;
+        unsigned char *rand;
+
+        rand = calloc((pp.m + 8) / 8, sizeof(char));
+        RAND_bytes(rand, (pp.m + 8) / 8);
         for (int i = 0; i < pp.m; ++i) {
-            bool choice = rand() % 2;   /* XXX: not secure */
+            bool choice = rand[(i / 8)] & (1 << (i % 8)) ? true : false;
             element_random(inputs[2 * i]);
             element_random(inputs[2 * i + 1]);
 
@@ -241,6 +245,7 @@ server_go(const char *host, const char *port, int m, const char *param)
             AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
             AES_ecb_encrypt_blks(map, 2, &key);
         }
+        free(rand);
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
