@@ -84,18 +84,22 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
     abke_time_t _start, _end;
 
     _start = get_time();
-    if (RAND_bytes((unsigned char *) decom, sizeof(block)) == 0) {
-        fprintf(stderr, "RAND_bytes failed\n");
-        return -1;
+    {
+        if (RAND_bytes((unsigned char *) decom, sizeof(block)) == 0) {
+            fprintf(stderr, "RAND_bytes failed\n");
+            return -1;
+        }
+        commitment = commit(label, *decom);
     }
-    commitment = commit(label, *decom);
     _end = get_time();
     fprintf(stderr, "Compute commitment: %f\n", _end - _start);
     if (comp)
         *comp += _end - _start;
 
     _start = get_time();
-    net_send(fd, &commitment, sizeof commitment, 0);
+    {
+        net_send(fd, &commitment, sizeof commitment, 0);
+    }
     _end = get_time();
     fprintf(stderr, "Send commitment: %f\n", _end - _start);
     if (comm)
@@ -147,20 +151,31 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
             goto cleanup;
         if (net_recv(fd, buf, length, 0) == -1)
             goto cleanup;
+        memcpy(&gc_seed, buf + p, sizeof gc_seed);
+        p += sizeof gc_seed;
+        memcpy(&enc_seed, buf + p, sizeof enc_seed);
+        p += sizeof enc_seed;
+        for (int i = 0; i < 2 * pp->m; ++i) {
+            p += element_from_bytes_(claimed_inputs[i], buf + p);
+        }
     }
     _end = get_time();
     _comm += _end - _start;
-    res = -1;
 
     _start = get_time();
-    memcpy(&gc_seed, buf + p, sizeof gc_seed);
-    p += sizeof gc_seed;
-    memcpy(&enc_seed, buf + p, sizeof enc_seed);
-    p += sizeof enc_seed;
-    for (int i = 0; i < 2 * pp->m; ++i) {
-        p += element_from_bytes_(claimed_inputs[i], buf + p);
+    res = -1;
+
+    /* Check if claimed inputs decrypt correctly */
+    apse_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed);
+    for (int i = 0; i < pp->m; ++i) {
+        if (element_cmp(claimed_ctxt.c2s[2 * i + flipped_attrs[i]],
+                        ctxt->c2s[2 * i + flipped_attrs[i]])) {
+            printf("CHEAT: input %d doesn't check out\n", i);
+            goto cleanup;
+        }
     }
 
+    /* Check that label map is correct and retrieve claimed input labels */
     for (int i = 0; i < pp->m; ++i) {
         block blk;
         AES_KEY key;
@@ -203,21 +218,11 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
         }
     }
 
-    apse_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed);
-    for (int i = 0; i < pp->m; ++i) {
-        if (element_cmp(claimed_ctxt.c2s[2 * i + flipped_attrs[i]],
-                        ctxt->c2s[2 * i + flipped_attrs[i]])) {
-            printf("CHEAT: input %d doesn't check out\n", i);
-            goto cleanup;
-        }
-    }
-
     /* Regarble the circuit to verify that it was constructed correctly */
     hashGarbledCircuit(&egc->gc, gc_hash, GARBLE_TYPE_STANDARD);
+    build_AND_policy(&gc2, pp->m); /* XXX: hardcoded policy */
     (void) seedRandom(&gc_seed);
-    build_AND_policy(&gc2, pp->m);
     garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE_STANDARD);
-
     gc_built = 1;
     if (checkGarbledCircuit(&gc2, gc_hash, GARBLE_TYPE_STANDARD) != 0) {
         printf("CHEAT: GCs don't check out\n");

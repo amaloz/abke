@@ -17,6 +17,28 @@
 
 #include "policies.h"
 
+#ifdef THPOOL
+struct thpool_args_t {
+    struct apse_pp_t *pp;
+    struct apse_master_t *mpk;
+    struct apse_pk_t *pk;
+    int result;
+};
+
+static threadpool g_thpool;
+static struct thpool_args_t g_thpool_args;
+
+static void *
+thpool_apse_vrfy(void *vargs)
+{
+    struct thpool_args_t *args = (struct thpool_args_t *) vargs;
+
+    args->result = apse_vrfy(args->pp, args->mpk, args->pk);
+
+    return NULL;
+}
+#endif  /* THPOOL */
+
 static int
 _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
 {
@@ -40,7 +62,7 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
     abke_time_t _start, _end;
     _start = get_time();
     {
-        build_AND_policy(gc, pp->m);
+        build_AND_policy(gc, pp->m); /* XXX: hardcoded policy! */
         garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
     }
     _end = get_time();
@@ -49,30 +71,6 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
         *total += _end - _start;
     return 0;
 }
-
-
-
-struct thpool_args_t {
-    struct apse_pp_t *pp;
-    struct apse_master_t *mpk;
-    struct apse_pk_t *pk;
-    int result;
-};
-
-#ifdef THPOOL
-static threadpool g_thpool;
-static struct thpool_args_t g_thpool_args;
-
-static void *
-thpool_apse_vrfy(void *vargs)
-{
-    struct thpool_args_t *args = (struct thpool_args_t *) vargs;
-
-    args->result = apse_vrfy(args->pp, args->mpk, args->pk);
-
-    return NULL;
-}
-#endif
 
 static int
 _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
@@ -120,6 +118,13 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
             return -1;
         }
         apse_enc(pp, pk, ctxt, inputs, seed);
+#ifdef THPOOL
+        thpool_wait(g_thpool);
+        if (g_thpool_args.result != 1) {
+            fprintf(stderr, "CHEAT: public key failed to verify\n");
+            return -1;
+        }
+#endif
     }
     _end = get_time();
     fprintf(stderr, "Encrypt: %f\n", _end - _start);
@@ -197,7 +202,6 @@ server_go(const char *host, const char *port, int m, const char *param)
 #ifdef THPOOL
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
-
         apse_pp_init(&pp, m, param);
         apse_mpk_init(&pp, &mpk);
         apse_pk_init(&pp, &client_pk);
@@ -208,7 +212,7 @@ server_go(const char *host, const char *port, int m, const char *param)
         }
         egc.map = calloc(2 * pp.m, sizeof(label_map_t));
         input_labels = allocate_blocks(2 * pp.m);
-        /* Need this for createInputLabels() */
+        /* Need to call seedRandom for createInputLabels() */
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
         (void) seedRandom(&seed);
         createInputLabels(input_labels, pp.m);
@@ -279,13 +283,6 @@ server_go(const char *host, const char *port, int m, const char *param)
     (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp);
     if (res == -1) goto cleanup;
-#ifdef THPOOL
-    thpool_wait(g_thpool);
-    if (g_thpool_args.result != 1) {
-        fprintf(stderr, "CHEAT: public key failed to veify\n");
-        goto cleanup;
-    }
-#endif
 
     _start = get_time();
     {
@@ -320,48 +317,57 @@ server_go(const char *host, const char *port, int m, const char *param)
     if (res == -1) goto cleanup;
 
     {
-        block output_label, r, commitment2;
+        block output_label, r;
 
         _start = get_time();
-        net_recv(fd, &output_label, sizeof output_label, 0);
-        net_recv(fd, &r, sizeof r, 0);
+        {
+            net_recv(fd, &output_label, sizeof output_label, 0);
+            net_recv(fd, &r, sizeof r, 0);
+        }
         _end = get_time();
         fprintf(stderr, "Receive decommitment: %f\n", _end - _start);
         comm += _end - _start;
 
         _start = get_time();
-        commitment2 = commit(output_label, r);
-        if (unequal_blocks(commitment, commitment2)) {
-            printf("CHEAT: commitments not equal\n");
-            goto cleanup;
-        }
-        if (unequal_blocks(output_label, output_labels[1])) {
-            printf("CHEAT: not 1-bit output label\n");
-            goto cleanup;
+        {
+            block tmp = commit(output_label, r);
+            if (unequal_blocks(commitment, tmp)) {
+                printf("CHEAT: commitments not equal\n");
+                goto cleanup;
+            }
+            if (unequal_blocks(output_label, output_labels[1])) {
+                printf("CHEAT: not 1-bit output label\n");
+                goto cleanup;
+            }
         }
         _end = get_time();
         fprintf(stderr, "Check commitment and output label: %f\n", _end - _start);
         comp += _end - _start;
     }
 
+    /* Do coin tossing */
     {
         block a, acom, b;
 
         _start = get_time();
-        if (RAND_bytes((unsigned char *) &a, sizeof a) == 0) {
-            fprintf(stderr, "RAND_bytes failed\n");
-            goto cleanup;
+        {
+            if (RAND_bytes((unsigned char *) &a, sizeof a) == 0) {
+                fprintf(stderr, "RAND_bytes failed\n");
+                goto cleanup;
+            }
+            acom = commit(a, zero_block());
         }
-        acom = commit(a, zero_block());
         _end = get_time();
         fprintf(stderr, "Compute commitment for coin tossing: %f\n", _end - _start);
         comp += _end - _start;
 
         _start = get_time();
-        net_send(fd, &acom, sizeof acom, 0);
-        net_recv(fd, &b, sizeof b, 0);
-        net_send(fd, &a, sizeof a, 0);
-        key = xorBlocks(a, b);
+        {
+            net_send(fd, &acom, sizeof acom, 0);
+            net_recv(fd, &b, sizeof b, 0);
+            net_send(fd, &a, sizeof a, 0);
+            key = xorBlocks(a, b);
+        }
         _end = get_time();
         fprintf(stderr, "Coin tossing: %f\n", _end - _start);
         comm += _end - _start;
