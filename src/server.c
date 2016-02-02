@@ -191,9 +191,9 @@ server_go(const char *host, const char *port, int m, const char *param)
 #endif
     fprintf(stderr, "\n");
 
-    /* Initialization */
     _start = get_time();
     {
+        block seed;
 #ifdef THPOOL
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
@@ -208,7 +208,9 @@ server_go(const char *host, const char *port, int m, const char *param)
         }
         egc.map = calloc(2 * pp.m, sizeof(label_map_t));
         input_labels = allocate_blocks(2 * pp.m);
-        (void) seedRandom(NULL); /* Need this for createInputLabels() */
+        /* Need this for createInputLabels() */
+        (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
+        (void) seedRandom(&seed);
         createInputLabels(input_labels, pp.m);
     }
     _end = get_time();
@@ -251,6 +253,8 @@ server_go(const char *host, const char *port, int m, const char *param)
     fprintf(stderr, "Generate random inputs and label map: %f\n", _end - _start);
     comp += _end - _start;
 
+    /* Need to re-seed before garbling so that when re-garbling we'll be in the
+     * same state as now */
     (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
     (void) seedRandom(&gc_seed);
     res = _garble(&pp, &egc.gc, input_labels, output_labels, &comp);

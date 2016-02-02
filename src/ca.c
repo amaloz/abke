@@ -6,6 +6,7 @@
 #include "justGarble.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <openssl/rand.h>
 
 static int
 loop(int sockfd, struct apse_pp_t *pp, struct apse_master_t *master)
@@ -84,6 +85,7 @@ ca_init(const char *host, const char *port, int m, const char *param)
     int sockfd;
     struct apse_master_t master;
     struct apse_pp_t pp;
+    block seed;
 
     fprintf(stderr, "Starting CA with m = %d and pairing %s\n", m, param);
     
@@ -92,7 +94,8 @@ ca_init(const char *host, const char *port, int m, const char *param)
         return -1;
     }
 
-    (void) seedRandom(NULL);
+    (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
+    (void) seedRandom(&seed);
 
     if (apse_pp_init(&pp, m, param))
         return -1;

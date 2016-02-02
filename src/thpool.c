@@ -8,7 +8,7 @@
  * 
  ********************************/
 
-
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <signal.h>
 #include <stdio.h>
