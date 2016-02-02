@@ -5,7 +5,7 @@
 #include "net.h"
 #include "util.h"
 
-/* #define THPOOL 1 */
+#define THPOOL 1
 
 #ifdef THPOOL
 #include "thpool.h"
@@ -206,7 +206,7 @@ server_go(const char *host, const char *port, int m, const char *param)
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
         }
-        egc.translations = calloc(2 * pp.m, sizeof(translation_t));
+        egc.map = calloc(2 * pp.m, sizeof(label_map_t));
         input_labels = allocate_blocks(2 * pp.m);
         (void) seedRandom(NULL); /* Need this for createInputLabels() */
         createInputLabels(input_labels, pp.m);
@@ -230,7 +230,7 @@ server_go(const char *host, const char *port, int m, const char *param)
             element_random(inputs[2 * i + 1]);
 
             blk = element_to_block(inputs[2 * i + (choice ? 1 : 0)]);
-            map = egc.translations[2 * i].map;
+            map = egc.map[2 * i].map;
             map[0] = input_labels[2 * i + (choice ? 1 : 0)];
             map[1] = zero_block();
 
@@ -238,7 +238,7 @@ server_go(const char *host, const char *port, int m, const char *param)
             AES_ecb_encrypt_blks(map, 2, &key);
 
             blk = element_to_block(inputs[2 * i + (choice ? 0 : 1)]);
-            map = egc.translations[2 * i + 1].map;
+            map = egc.map[2 * i + 1].map;
             map[0] = input_labels[2 * i + (choice ? 0 : 1)];
             map[1] = zero_block();
 
@@ -248,7 +248,7 @@ server_go(const char *host, const char *port, int m, const char *param)
         free(rand);
     }
     _end = get_time();
-    fprintf(stderr, "Generate random inputs: %f\n", _end - _start);
+    fprintf(stderr, "Generate random inputs and label map: %f\n", _end - _start);
     comp += _end - _start;
 
     (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
@@ -385,7 +385,7 @@ cleanup:
 
         if (gc_built)
             removeGarbledCircuit(&egc.gc);
-        free(egc.translations);
+        free(egc.map);
 
         if (fd != -1)
             close(fd);

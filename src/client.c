@@ -32,7 +32,7 @@ _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk,
 static int
 _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
          struct apse_ctxt_t *ctxt, block *input_labels,
-         translation_t *translations, const int *attrs, abke_time_t *total)
+         label_map_t *map, const int *attrs, abke_time_t *total)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -40,7 +40,7 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
         element_t *inputs;
         AES_KEY key;
         block blk;
-        translation_t trans;
+        label_map_t tmp;
 
         inputs = calloc(pp->m, sizeof(element_t));
         for (int i = 0; i < pp->m; ++i) {
@@ -51,17 +51,17 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
             blk = element_to_block(inputs[i]);
 
             AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
-            memcpy(&trans, &translations[2 * i], sizeof(translation_t));
-            AES_ecb_decrypt_blks(trans.map, 2, &key);
+            memcpy(&tmp, &map[2 * i], sizeof(label_map_t));
+            AES_ecb_decrypt_blks(tmp.map, 2, &key);
 
-            if (equal_blocks(trans.map[1], zero_block())) {
-                input_labels[i] = trans.map[0];
+            if (equal_blocks(tmp.map[1], zero_block())) {
+                input_labels[i] = tmp.map[0];
             } else {
-                memcpy(&trans, &translations[2 * i + 1], sizeof(translation_t));
-                AES_ecb_decrypt_blks(trans.map, 2, &key);
+                memcpy(&tmp, &map[2 * i + 1], sizeof(label_map_t));
+                AES_ecb_decrypt_blks(tmp.map, 2, &key);
                 /* If blocks unequal can't check here as that leads to selective
                  * failure attack */
-                input_labels[i] = trans.map[0];
+                input_labels[i] = tmp.map[0];
             }
 
         }
@@ -164,42 +164,42 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
     for (int i = 0; i < pp->m; ++i) {
         block blk;
         AES_KEY key;
-        translation_t trans;
+        label_map_t map;
 
         blk = element_to_block(claimed_inputs[2 * i]);
         AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
-        memcpy(&trans, egc->translations[2 * i].map, sizeof(translation_t));
-        AES_ecb_decrypt_blks(trans.map, 2, &key);
+        memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
+        AES_ecb_decrypt_blks(map.map, 2, &key);
 
-        if (equal_blocks(trans.map[1], zero_block())) {
-            claimed_input_labels[2 * i] = trans.map[0];
+        if (equal_blocks(map.map[1], zero_block())) {
+            claimed_input_labels[2 * i] = map.map[0];
 
             blk = element_to_block(claimed_inputs[2 * i + 1]);
             AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
-            memcpy(&trans, egc->translations[2 * i + 1].map, sizeof(translation_t));
-            AES_ecb_decrypt_blks(trans.map, 2, &key);
-            if (unequal_blocks(trans.map[1], zero_block())) {
+            memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
+            AES_ecb_decrypt_blks(map.map, 2, &key);
+            if (unequal_blocks(map.map[1], zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
-            claimed_input_labels[2 * i + 1] = trans.map[0];
+            claimed_input_labels[2 * i + 1] = map.map[0];
         } else {
-            memcpy(&trans, egc->translations[2 * i + 1].map, sizeof(translation_t));
-            AES_ecb_decrypt_blks(trans.map, 2, &key);
-            if (unequal_blocks(trans.map[1], zero_block())) {
+            memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
+            AES_ecb_decrypt_blks(map.map, 2, &key);
+            if (unequal_blocks(map.map[1], zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
-            claimed_input_labels[2 * i] = trans.map[0];
+            claimed_input_labels[2 * i] = map.map[0];
             blk = element_to_block(claimed_inputs[2 * i + 1]);
             AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
-            memcpy(&trans, egc->translations[2 * i].map, sizeof(translation_t));
-            AES_ecb_decrypt_blks(trans.map, 2, &key);
-            if (unequal_blocks(trans.map[1], zero_block())) {
+            memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
+            AES_ecb_decrypt_blks(map.map, 2, &key);
+            if (unequal_blocks(map.map[1], zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
-            claimed_input_labels[2 * i + 1] = trans.map[0];
+            claimed_input_labels[2 * i + 1] = map.map[0];
         }
     }
 
@@ -282,7 +282,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         apse_sk_init(&pp, &sk);
         apse_ctxt_init(&pp, &ctxt);
         input_labels = allocate_blocks(pp.m);
-        egc.translations = NULL;
+        egc.map = NULL;
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
@@ -333,7 +333,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     comm += _end - _start;
 
     {
-        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.translations, attrs, &comp);
+        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp);
     }
     if (res == -1) goto cleanup;
 
@@ -393,8 +393,8 @@ cleanup:
 
         if (gc_built)
             removeGarbledCircuit(&egc.gc);
-        if (egc.translations)
-            free(egc.translations);
+        if (egc.map)
+            free(egc.map);
 
         if (fd != -1)
             close(fd);

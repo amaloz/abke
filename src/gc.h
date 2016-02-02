@@ -5,11 +5,11 @@
 
 typedef struct {
     block map[2];
-} translation_t;
+} label_map_t;
 
 typedef struct {
     GarbledCircuit gc;
-    translation_t *translations;
+    label_map_t *map;
 } ExtGarbledCircuit;
 
 #endif
