@@ -1,3 +1,4 @@
+#include "ase.h"
 #include "ca.h"
 #include "client.h"
 #include "server.h"
@@ -10,6 +11,7 @@
 
 struct args {
     enum role_e role;
+    enum ase_type_e type;
     int m;
     char *host;
     char *port;
@@ -20,6 +22,7 @@ struct args {
 static void
 args_init(struct args *args)
 {
+    args->type = ASE_HOMOSIG;
     args->role = ROLE_NONE;
     args->m = 16;
     args->host = "127.0.0.1";
@@ -45,13 +48,14 @@ go(struct args *args)
 {
     switch (args->role) {
     case ROLE_CA:
-        ca_init(CA_HOST, CA_PORT, args->m, args->param);
+        ca_init(CA_HOST, CA_PORT, args->m, args->param, args->type);
         break;
     case ROLE_SERVER:
-        server_go(args->host, args->port, args->m, args->param);
+        server_go(args->host, args->port, args->m, args->param, args->type);
         break;
     case ROLE_CLIENT:
-        client_go(args->host, args->port, args->attrs, args->m, args->param);
+        client_go(args->host, args->port, args->attrs, args->m, args->param,
+                  args->type);
         break;
     default:
         break;

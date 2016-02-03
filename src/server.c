@@ -40,12 +40,13 @@ thpool_ase_vrfy(void *vargs)
 #endif  /* THPOOL */
 
 static int
-_connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk)
+_connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
+               enum ase_type_e type)
 {
     abke_time_t _start, _end;
     _start = get_time();
     {
-        if (ca_info(pp, mpk, ROLE_SERVER, NULL, NULL, NULL) == -1) {
+        if (ca_info(pp, mpk, ROLE_SERVER, NULL, NULL, NULL, type) == -1) {
             fprintf(stderr, "Unable to connect to CA\n");
             return -1;
         }
@@ -74,12 +75,12 @@ _garble(const struct ase_pp_t *pp, GarbledCircuit *gc, block *input_labels,
 
 static int
 _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
-        int fd, abke_time_t *comm, abke_time_t *comp)
+        int fd, abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
 {
     abke_time_t _start, _end;
 
     _start = get_time();
-    ase_pk_recv(pp, pk, fd);
+    ase_pk_recv(pp, pk, fd, type);
     _end = get_time();
     fprintf(stderr, "Receive public key: %f\n", _end - _start);
     if (comm)
@@ -93,7 +94,7 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
     g_thpool_args.result = 0;
     thpool_add_work(g_thpool, thpool_ase_vrfy, &g_thpool_args);
 #else
-    if (!ase_vrfy(pp, mpk, pk)) {
+    if (!ase_vrfy(pp, mpk, pk, type)) {
         fprintf(stderr, "pk fails to verify\n");
         return -1;
     }
@@ -108,7 +109,7 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
 static int
 _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
          struct ase_ctxt_t *ctxt, element_t *inputs,
-         unsigned int *seed, abke_time_t *total)
+         unsigned int *seed, abke_time_t *total, enum ase_type_e type)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -117,7 +118,7 @@ _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
             fprintf(stderr, "RAND_bytes failed\n");
             return -1;
         }
-        ase_enc(pp, pk, ctxt, inputs, seed);
+        ase_enc(pp, pk, ctxt, inputs, seed, type);
 #ifdef THPOOL
         thpool_wait(g_thpool);
         if (g_thpool_args.result != 1) {
@@ -173,7 +174,8 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
 
 
 int
-server_go(const char *host, const char *port, int m, const char *param)
+server_go(const char *host, const char *port, int m, const char *param,
+          enum ase_type_e type)
 {
     int sockfd = -1, fd = -1;
     block gc_seed, commitment;
@@ -203,9 +205,9 @@ server_go(const char *host, const char *port, int m, const char *param)
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
         ase_pp_init(&pp, m, param);
-        ase_mpk_init(&pp, &mpk);
-        ase_pk_init(&pp, &client_pk);
-        ase_ctxt_init(&pp, &ctxt);
+        ase_mpk_init(&pp, &mpk, type);
+        ase_pk_init(&pp, &client_pk, type);
+        ase_ctxt_init(&pp, &ctxt, type);
         inputs = calloc(2 * pp.m, sizeof(element_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
@@ -265,7 +267,7 @@ server_go(const char *host, const char *port, int m, const char *param)
     if (res == -1) goto cleanup;
     gc_built = 1;
 
-    res = _connect_to_ca(&pp, &mpk);
+    res = _connect_to_ca(&pp, &mpk, type);
     if (res == -1) goto cleanup;
 
     /* Initialize server and accept connection from client */
@@ -278,15 +280,15 @@ server_go(const char *host, const char *port, int m, const char *param)
         exit(EXIT_FAILURE);
     }
 
-    res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp);
+    res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp, type);
     if (res == -1) goto cleanup;
     (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
-    res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp);
+    res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();
     {
-        if (ase_ctxt_send(&pp, &ctxt, fd) == -1)
+        if (ase_ctxt_send(&pp, &ctxt, fd, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -388,9 +390,9 @@ cleanup:
         free(inputs);
         free(input_labels);
 
-        ase_ctxt_clear(&pp, &ctxt);
-        ase_pk_clear(&pp, &client_pk);
-        ase_mpk_clear(&pp, &mpk);
+        ase_ctxt_clear(&pp, &ctxt, type);
+        ase_pk_clear(&pp, &client_pk, type);
+        ase_mpk_clear(&pp, &mpk, type);
         ase_pp_clear(&pp);
 
         if (gc_built)

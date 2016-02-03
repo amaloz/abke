@@ -9,7 +9,8 @@
 #include <openssl/rand.h>
 
 static int
-loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master)
+loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master,
+     enum ase_type_e type)
 {
     int fd;
     enum role_e role;
@@ -34,22 +35,22 @@ loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master)
         return -1;
     }
     
-    ase_mpk_send(pp, master, fd);
+    ase_mpk_send(pp, master, fd, type);
     if (role == ROLE_CLIENT) {
         int *attrs;
         struct ase_pk_t pk;
         struct ase_sk_t sk;
 
         attrs = calloc(pp->m, sizeof(int));
-        ase_pk_init(pp, &pk);
-        ase_sk_init(pp, &sk);
+        ase_pk_init(pp, &pk, type);
+        ase_sk_init(pp, &sk, type);
         net_recv(fd, attrs, sizeof(int) * pp->m, 0);
-        ase_gen(pp, master, &pk, &sk, attrs);
-        ase_pk_send(pp, &pk, fd);
-        ase_sk_send(pp, &sk, fd);
+        ase_gen(pp, master, &pk, &sk, attrs, type);
+        ase_pk_send(pp, &pk, fd, type);
+        ase_sk_send(pp, &sk, fd, type);
 
-        ase_sk_clear(pp, &sk);
-        ase_pk_clear(pp, &pk);
+        ase_sk_clear(pp, &sk, type);
+        ase_pk_clear(pp, &pk, type);
         free(attrs);
     }
     close(fd);
@@ -59,7 +60,8 @@ loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master)
 
 int
 ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
-        struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs)
+        struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs,
+        enum ase_type_e type)
 {
     int cafd;
 
@@ -69,18 +71,19 @@ ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
     }
 
     net_send(cafd, &role, sizeof role, 0);
-    ase_mpk_recv(pp, mpk, cafd);
+    ase_mpk_recv(pp, mpk, cafd, type);
     if (role == ROLE_CLIENT) {
         net_send(cafd, attrs, sizeof(int) * pp->m, 0);
-        ase_pk_recv(pp, pk, cafd);
-        ase_sk_recv(pp, sk, cafd);
+        ase_pk_recv(pp, pk, cafd, type);
+        ase_sk_recv(pp, sk, cafd, type);
     }
     close(cafd);
     return 0;
 }
 
 int
-ca_init(const char *host, const char *port, int m, const char *param)
+ca_init(const char *host, const char *port, int m, const char *param,
+        enum ase_type_e type)
 {
     int sockfd;
     struct ase_master_t master;
@@ -99,14 +102,14 @@ ca_init(const char *host, const char *port, int m, const char *param)
 
     if (ase_pp_init(&pp, m, param))
         return -1;
-    ase_master_init(&pp, &master);
+    ase_master_init(&pp, &master, type);
 
     while (1) {
-        if (loop(sockfd, &pp, &master) == -1)
+        if (loop(sockfd, &pp, &master, type) == -1)
             return -1;
     }
 
-    ase_master_clear(&pp, &master);
+    ase_master_clear(&pp, &master, type);
     ase_pp_clear(&pp);
 
     return 0;

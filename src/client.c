@@ -14,12 +14,13 @@
 
 static int
 _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
-               struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs)
+               struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs,
+               enum ase_type_e type)
 {
     abke_time_t _start, _end;
     _start = get_time();
     {
-        if (ca_info(pp, mpk, ROLE_CLIENT, pk, sk, attrs) == -1) {
+        if (ca_info(pp, mpk, ROLE_CLIENT, pk, sk, attrs, type) == -1) {
             fprintf(stderr, "ERROR: Unable to connect to CA\n");
             return -1;
         }
@@ -32,7 +33,8 @@ _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
 static int
 _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
          struct ase_ctxt_t *ctxt, block *input_labels,
-         label_map_t *map, const int *attrs, abke_time_t *total)
+         label_map_t *map, const int *attrs, abke_time_t *total,
+         enum ase_type_e type)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -46,7 +48,7 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
         for (int i = 0; i < pp->m; ++i) {
             element_init_G1(inputs[i], pp->pairing);
         }
-        ase_dec(pp, sk, inputs, ctxt, attrs);
+        ase_dec(pp, sk, inputs, ctxt, attrs, type);
         for (int i = 0; i < pp->m; ++i) {
             blk = element_to_block(inputs[i]);
 
@@ -110,7 +112,7 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 static int
 _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
        struct ase_ctxt_t *ctxt, const int *attrs, int fd, abke_time_t *comm,
-       abke_time_t *comp)
+       abke_time_t *comp, enum ase_type_e type)
 {
     GarbledCircuit gc2;
     int gc_built = 0;
@@ -129,7 +131,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
 
     _start = get_time();
     {
-        ase_ctxt_init(pp, &claimed_ctxt);
+        ase_ctxt_init(pp, &claimed_ctxt, type);
         claimed_inputs = calloc(2 * pp->m, sizeof(element_t));
         for (int i = 0; i < 2 * pp->m; ++i) {
             element_init_G1(claimed_inputs[i], pp->pairing);
@@ -166,12 +168,20 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     res = -1;
 
     /* Check if claimed inputs decrypt correctly */
-    ase_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed);
+    ase_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs,
+                   &enc_seed, type);
     for (int i = 0; i < pp->m; ++i) {
-        if (element_cmp(claimed_ctxt.c2s[2 * i + flipped_attrs[i]],
-                        ctxt->c2s[2 * i + flipped_attrs[i]])) {
-            printf("CHEAT: input %d doesn't check out\n", i);
-            goto cleanup;
+        switch (type) {
+        case ASE_HOMOSIG:
+            if (element_cmp(claimed_ctxt.homosig.c2s[2 * i + flipped_attrs[i]],
+                            ctxt->homosig.c2s[2 * i + flipped_attrs[i]])) {
+                printf("CHEAT: input %d doesn't check out\n", i);
+                goto cleanup;
+            }
+            break;
+        default:
+            assert(0);
+            abort();
         }
     }
 
@@ -238,7 +248,7 @@ cleanup:
     free(claimed_inputs);
     free(claimed_input_labels);
     free(flipped_attrs);
-    ase_ctxt_clear(pp, &claimed_ctxt);
+    ase_ctxt_clear(pp, &claimed_ctxt, type);
 
     if (gc_built)
         removeGarbledCircuit(&gc2);
@@ -256,7 +266,7 @@ cleanup:
 
 int
 client_go(const char *host, const char *port, const int *attrs, int m,
-          const char *param)
+          const char *param, enum ase_type_e type)
 {
     int fd = -1;
     struct ase_pp_t pp;
@@ -282,10 +292,10 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     _start = get_time();
     {
         ase_pp_init(&pp, m, param);
-        ase_mpk_init(&pp, &mpk);
-        ase_pk_init(&pp, &pk);
-        ase_sk_init(&pp, &sk);
-        ase_ctxt_init(&pp, &ctxt);
+        ase_mpk_init(&pp, &mpk, type);
+        ase_pk_init(&pp, &pk, type);
+        ase_sk_init(&pp, &sk, type);
+        ase_ctxt_init(&pp, &ctxt, type);
         input_labels = allocate_blocks(pp.m);
         egc.map = NULL;
     }
@@ -293,12 +303,12 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     fprintf(stderr, "Initialize: %f\n", _end - _start);
     comp += _end - _start;
 
-    res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs);
+    res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();
     {
-        ase_unlink(&pp, &pk, &sk, &pk, &sk);
+        ase_unlink(&pp, &pk, &sk, &pk, &sk, type);
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);
@@ -312,7 +322,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        if (ase_pk_send(&pp, &pk, fd) == -1)
+        if (ase_pk_send(&pp, &pk, fd, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -321,7 +331,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        if (ase_ctxt_recv(&pp, &ctxt, fd) == -1)
+        if (ase_ctxt_recv(&pp, &ctxt, fd, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -338,7 +348,8 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     comm += _end - _start;
 
     {
-        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp);
+        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp,
+                       type);
     }
     if (res == -1) goto cleanup;
 
@@ -353,7 +364,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     res = _commit(output_label, &decom, fd, &comm, &comp);
     if (res == -1) goto cleanup;
-    res = _check(&pp, &pk, &egc, &ctxt, attrs, fd, &comm, &comp);
+    res = _check(&pp, &pk, &egc, &ctxt, attrs, fd, &comm, &comp, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();
@@ -390,10 +401,10 @@ cleanup:
     _start = get_time();
     {
         free(input_labels);
-        ase_ctxt_clear(&pp, &ctxt);
-        ase_mpk_clear(&pp, &mpk);
-        ase_sk_clear(&pp, &sk);
-        ase_pk_clear(&pp, &pk);
+        ase_ctxt_clear(&pp, &ctxt, type);
+        ase_mpk_clear(&pp, &mpk, type);
+        ase_sk_clear(&pp, &sk, type);
+        ase_pk_clear(&pp, &pk, type);
         ase_pp_clear(&pp);
 
         if (gc_built)
