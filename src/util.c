@@ -1,10 +1,20 @@
 #include "util.h"
 
 #include <openssl/sha.h>
+#include <sys/stat.h>
 
-#define MIN(a, b)                               \
-    (a) < (b) ? (a) : (b)
+#define MIN(a, b) (a) < (b) ? (a) : (b)
 
+size_t
+filesize(const char *fname)
+{
+	struct stat st;
+
+	if (stat(fname, &st) == 0)
+		return st.st_size;
+
+	return -1;
+}
 
 static void
 sha1_hash(char *out, size_t outlen, const unsigned char *in, size_t inlen)

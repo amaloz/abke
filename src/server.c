@@ -5,7 +5,7 @@
 #include "net.h"
 #include "util.h"
 
-#define THPOOL 1
+/* #define THPOOL 1 */
 
 #ifdef THPOOL
 #include "thpool.h"

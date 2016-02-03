@@ -3,18 +3,6 @@
 #include "util.h"
 
 #include <assert.h>
-#include <sys/stat.h>
-
-static size_t
-filesize(const char *fname)
-{
-	struct stat st;
-
-	if (stat(fname, &st) == 0)
-		return st.st_size;
-
-	return -1;
-}
 
 int
 apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
