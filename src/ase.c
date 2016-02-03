@@ -1,11 +1,11 @@
-#include "apse.h"
+#include "ase.h"
 #include "net.h"
 #include "util.h"
 
 #include <assert.h>
 
 int
-apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
+ase_pp_init(struct ase_pp_t *pp, int m, const char *fname)
 {
     char *param;
     size_t count, fsize;
@@ -34,13 +34,13 @@ apse_pp_init(struct apse_pp_t *pp, int m, const char *fname)
 }
 
 void
-apse_pp_clear(struct apse_pp_t *pp)
+ase_pp_clear(struct ase_pp_t *pp)
 {
     pairing_clear(pp->pairing);
 }
 
 void
-apse_master_init(struct apse_pp_t *pp, struct apse_master_t *master)
+ase_master_init(struct ase_pp_t *pp, struct ase_master_t *master)
 {
     bls_init(&master->gsig, pp->pairing);
     bls_init(&master->hsig, pp->pairing);
@@ -52,7 +52,7 @@ apse_master_init(struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 void
-apse_master_clear(const struct apse_pp_t *pp, struct apse_master_t *master)
+ase_master_clear(const struct ase_pp_t *pp, struct ase_master_t *master)
 {
     bls_clear(&master->gsig);
     bls_clear(&master->hsig);
@@ -64,7 +64,7 @@ apse_master_clear(const struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 void
-apse_mpk_init(struct apse_pp_t *pp, struct apse_master_t *master)
+ase_mpk_init(struct ase_pp_t *pp, struct ase_master_t *master)
 {
     bls_pk_init(&master->gsig, pp->pairing);
     bls_pk_init(&master->hsig, pp->pairing);
@@ -76,7 +76,7 @@ apse_mpk_init(struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 void
-apse_mpk_clear(struct apse_pp_t *pp, struct apse_master_t *master)
+ase_mpk_clear(struct ase_pp_t *pp, struct ase_master_t *master)
 {
     bls_pk_clear(&master->gsig);
     bls_pk_clear(&master->hsig);
@@ -88,7 +88,7 @@ apse_mpk_clear(struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 void
-apse_pk_init(struct apse_pp_t *pp, struct apse_pk_t *pk)
+ase_pk_init(struct ase_pp_t *pp, struct ase_pk_t *pk)
 {
     element_init_G1(pk->g, pp->pairing);
     element_init_G1(pk->h, pp->pairing);
@@ -105,7 +105,7 @@ apse_pk_init(struct apse_pp_t *pp, struct apse_pk_t *pk)
 }
 
 void
-apse_pk_clear(const struct apse_pp_t *pp, struct apse_pk_t *pk)
+ase_pk_clear(const struct ase_pp_t *pp, struct ase_pk_t *pk)
 {
     element_clear(pk->g);
     element_clear(pk->h);
@@ -122,7 +122,7 @@ apse_pk_clear(const struct apse_pp_t *pp, struct apse_pk_t *pk)
 }
 
 void
-apse_sk_init(struct apse_pp_t *pp, struct apse_sk_t *sk)
+ase_sk_init(struct ase_pp_t *pp, struct ase_sk_t *sk)
 {
     sk->rs = calloc(pp->m, sizeof(element_t));
     for (int i = 0; i < pp->m; ++i) {
@@ -131,7 +131,7 @@ apse_sk_init(struct apse_pp_t *pp, struct apse_sk_t *sk)
 }
 
 void
-apse_sk_clear(const struct apse_pp_t *pp, struct apse_sk_t *sk)
+ase_sk_clear(const struct ase_pp_t *pp, struct ase_sk_t *sk)
 {
     for (int i = 0; i < pp->m; ++i) {
         element_clear(sk->rs[i]);
@@ -140,7 +140,7 @@ apse_sk_clear(const struct apse_pp_t *pp, struct apse_sk_t *sk)
 }
 
 void
-apse_ctxt_init(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
+ase_ctxt_init(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt)
 {
     element_init_G1(ctxt->g, pp->pairing);
     element_init_G1(ctxt->h, pp->pairing);
@@ -151,7 +151,7 @@ apse_ctxt_init(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
 }
 
 void
-apse_ctxt_clear(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
+ase_ctxt_clear(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt)
 {
     element_clear(ctxt->g);
     element_clear(ctxt->h);
@@ -164,7 +164,7 @@ apse_ctxt_clear(struct apse_pp_t *pp, struct apse_ctxt_t *ctxt)
 /* Send/receive functions */
 
 int
-apse_mpk_send(const struct apse_pp_t *pp, struct apse_master_t *master,
+ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master,
               int fd)
 {
     size_t length = 0, p = 0;
@@ -211,7 +211,7 @@ cleanup:
 }
 
 int 
-apse_mpk_recv(struct apse_pp_t *pp, struct apse_master_t *master, int fd)
+ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, int fd)
 {
     size_t length, p = 0;
     unsigned char *buf;
@@ -243,7 +243,7 @@ cleanup:
 }
 
 int
-apse_pk_send(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
+ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -282,7 +282,7 @@ cleanup:
 }
 
 int
-apse_pk_recv(const struct apse_pp_t *pp, struct apse_pk_t *pk, int fd)
+ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd)
 {
     size_t length, p = 0;
     unsigned char *buf;
@@ -313,7 +313,7 @@ cleanup:
 }
 
 int
-apse_sk_send(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
+ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -336,7 +336,7 @@ cleanup:
 }
 
 int
-apse_sk_recv(const struct apse_pp_t *pp, struct apse_sk_t *sk, int fd)
+ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd)
 {
     size_t length, p = 0;
     unsigned char *buf;
@@ -358,7 +358,7 @@ cleanup:
 }
 
 int
-apse_ctxt_send(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
+ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -385,7 +385,7 @@ cleanup:
 }
 
 int
-apse_ctxt_recv(const struct apse_pp_t *pp, struct apse_ctxt_t *ctxt, int fd)
+ase_ctxt_recv(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd)
 {
     size_t length, p = 0;
     unsigned char *buf;
@@ -409,16 +409,16 @@ cleanup:
     
 }
 
-/* Print APSE functions */
+/* Print ASE functions */
 
 void
-apse_pp_print(struct apse_pp_t *pp)
+ase_pp_print(struct ase_pp_t *pp)
 {
     printf("m = %d\n", pp->m);
 }
 
 void
-apse_pk_print(struct apse_pp_t *pp, struct apse_pk_t *pk)
+ase_pk_print(struct ase_pp_t *pp, struct ase_pk_t *pk)
 {
     element_printf("g = %B\n", pk->g);
     element_printf("h = %B\n", pk->h);
@@ -433,7 +433,7 @@ apse_pk_print(struct apse_pp_t *pp, struct apse_pk_t *pk)
 }
 
 void
-apse_sk_print(struct apse_pp_t *pp, struct apse_sk_t *sk)
+ase_sk_print(struct ase_pp_t *pp, struct ase_sk_t *sk)
 {
     for (int i = 0; i < pp->m; ++i) {
         element_printf("rs[%d] = %B\n", i, sk->rs[i]);
@@ -441,11 +441,11 @@ apse_sk_print(struct apse_pp_t *pp, struct apse_sk_t *sk)
 }
 
 
-/* Main APSE functions */
+/* Main ASE functions */
 
 void
-apse_gen(struct apse_pp_t *pp, struct apse_master_t *msk,
-         struct apse_pk_t *pk, struct apse_sk_t *sk, const int *attrs)
+ase_gen(struct ase_pp_t *pp, struct ase_master_t *msk,
+         struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs)
 {
     element_t tmp;
 
@@ -479,7 +479,7 @@ apse_gen(struct apse_pp_t *pp, struct apse_master_t *msk,
 }
 
 int
-apse_vrfy(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk)
+ase_vrfy(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk)
 {
     element_t tmp;
     int res = 0;
@@ -505,8 +505,8 @@ cleanup:
 }
 
 void
-apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_t *ciphertext, element_t *plaintext,
+ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk,
+         struct ase_ctxt_t *ciphertext, element_t *plaintext,
          const unsigned int *seed)
 {
     element_t s, t;
@@ -547,8 +547,8 @@ apse_enc(struct apse_pp_t *pp, struct apse_pk_t *pk,
 }
 
 void
-apse_enc_select(struct apse_pp_t *pp, struct apse_pk_t *pk, const int *attrs,
-                struct apse_ctxt_t *ciphertext, element_t *plaintext,
+ase_enc_select(struct ase_pp_t *pp, struct ase_pk_t *pk, const int *attrs,
+                struct ase_ctxt_t *ciphertext, element_t *plaintext,
                 const unsigned int *seed)
 {
     element_t s, t;
@@ -591,8 +591,8 @@ apse_enc_select(struct apse_pp_t *pp, struct apse_pk_t *pk, const int *attrs,
 }
 
 void
-apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
-         struct apse_ctxt_t *ciphertext, const int *attrs)
+ase_dec(struct ase_pp_t *pp, struct ase_sk_t *sk, element_t *plaintext,
+         struct ase_ctxt_t *ciphertext, const int *attrs)
 {
     element_pp_t g_pp, h_pp;
 
@@ -614,8 +614,8 @@ apse_dec(struct apse_pp_t *pp, struct apse_sk_t *sk, element_t *plaintext,
 }
 
 void
-apse_unlink(struct apse_pp_t *pp, struct apse_pk_t *rpk, struct apse_sk_t *rsk,
-            struct apse_pk_t *pk, struct apse_sk_t *sk)
+ase_unlink(struct ase_pp_t *pp, struct ase_pk_t *rpk, struct ase_sk_t *rsk,
+            struct ase_pk_t *pk, struct ase_sk_t *sk)
 {
     element_t r;
 

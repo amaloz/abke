@@ -1,4 +1,4 @@
-#include "apse.h"
+#include "ase.h"
 #include "ca.h"
 #include "gc.h"
 #include "gc_comm.h"
@@ -13,8 +13,8 @@
 #include "policies.h"
 
 static int
-_connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk,
-               struct apse_pk_t *pk, struct apse_sk_t *sk, const int *attrs)
+_connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
+               struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -30,8 +30,8 @@ _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk,
 }
 
 static int
-_decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
-         struct apse_ctxt_t *ctxt, block *input_labels,
+_decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
+         struct ase_ctxt_t *ctxt, block *input_labels,
          label_map_t *map, const int *attrs, abke_time_t *total)
 {
     abke_time_t _start, _end;
@@ -46,7 +46,7 @@ _decrypt(struct apse_pp_t *pp, struct apse_sk_t *sk,
         for (int i = 0; i < pp->m; ++i) {
             element_init_G1(inputs[i], pp->pairing);
         }
-        apse_dec(pp, sk, inputs, ctxt, attrs);
+        ase_dec(pp, sk, inputs, ctxt, attrs);
         for (int i = 0; i < pp->m; ++i) {
             blk = element_to_block(inputs[i]);
 
@@ -108,14 +108,14 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 }
 
 static int
-_check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
-       struct apse_ctxt_t *ctxt, const int *attrs, int fd, abke_time_t *comm,
+_check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
+       struct ase_ctxt_t *ctxt, const int *attrs, int fd, abke_time_t *comm,
        abke_time_t *comp)
 {
     GarbledCircuit gc2;
     int gc_built = 0;
     unsigned char gc_hash[SHA_DIGEST_LENGTH];
-    struct apse_ctxt_t claimed_ctxt;
+    struct ase_ctxt_t claimed_ctxt;
     element_t *claimed_inputs;
     block *claimed_input_labels;
     block gc_seed;
@@ -129,7 +129,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
 
     _start = get_time();
     {
-        apse_ctxt_init(pp, &claimed_ctxt);
+        ase_ctxt_init(pp, &claimed_ctxt);
         claimed_inputs = calloc(2 * pp->m, sizeof(element_t));
         for (int i = 0; i < 2 * pp->m; ++i) {
             element_init_G1(claimed_inputs[i], pp->pairing);
@@ -166,7 +166,7 @@ _check(struct apse_pp_t *pp, struct apse_pk_t *pk, ExtGarbledCircuit *egc,
     res = -1;
 
     /* Check if claimed inputs decrypt correctly */
-    apse_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed);
+    ase_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed);
     for (int i = 0; i < pp->m; ++i) {
         if (element_cmp(claimed_ctxt.c2s[2 * i + flipped_attrs[i]],
                         ctxt->c2s[2 * i + flipped_attrs[i]])) {
@@ -238,7 +238,7 @@ cleanup:
     free(claimed_inputs);
     free(claimed_input_labels);
     free(flipped_attrs);
-    apse_ctxt_clear(pp, &claimed_ctxt);
+    ase_ctxt_clear(pp, &claimed_ctxt);
 
     if (gc_built)
         removeGarbledCircuit(&gc2);
@@ -259,11 +259,11 @@ client_go(const char *host, const char *port, const int *attrs, int m,
           const char *param)
 {
     int fd = -1;
-    struct apse_pp_t pp;
-    struct apse_master_t mpk;
-    struct apse_pk_t pk;
-    struct apse_sk_t sk;
-    struct apse_ctxt_t ctxt;
+    struct ase_pp_t pp;
+    struct ase_master_t mpk;
+    struct ase_pk_t pk;
+    struct ase_sk_t sk;
+    struct ase_ctxt_t ctxt;
     block *input_labels;
     block output_label, decom;
     block key = zero_block();
@@ -281,11 +281,11 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        apse_pp_init(&pp, m, param);
-        apse_mpk_init(&pp, &mpk);
-        apse_pk_init(&pp, &pk);
-        apse_sk_init(&pp, &sk);
-        apse_ctxt_init(&pp, &ctxt);
+        ase_pp_init(&pp, m, param);
+        ase_mpk_init(&pp, &mpk);
+        ase_pk_init(&pp, &pk);
+        ase_sk_init(&pp, &sk);
+        ase_ctxt_init(&pp, &ctxt);
         input_labels = allocate_blocks(pp.m);
         egc.map = NULL;
     }
@@ -298,7 +298,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        apse_unlink(&pp, &pk, &sk, &pk, &sk);
+        ase_unlink(&pp, &pk, &sk, &pk, &sk);
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);
@@ -312,7 +312,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        if (apse_pk_send(&pp, &pk, fd) == -1)
+        if (ase_pk_send(&pp, &pk, fd) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -321,7 +321,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        if (apse_ctxt_recv(&pp, &ctxt, fd) == -1)
+        if (ase_ctxt_recv(&pp, &ctxt, fd) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -390,11 +390,11 @@ cleanup:
     _start = get_time();
     {
         free(input_labels);
-        apse_ctxt_clear(&pp, &ctxt);
-        apse_mpk_clear(&pp, &mpk);
-        apse_sk_clear(&pp, &sk);
-        apse_pk_clear(&pp, &pk);
-        apse_pp_clear(&pp);
+        ase_ctxt_clear(&pp, &ctxt);
+        ase_mpk_clear(&pp, &mpk);
+        ase_sk_clear(&pp, &sk);
+        ase_pk_clear(&pp, &pk);
+        ase_pp_clear(&pp);
 
         if (gc_built)
             removeGarbledCircuit(&egc.gc);

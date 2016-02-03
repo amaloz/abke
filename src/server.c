@@ -1,4 +1,4 @@
-#include "apse.h"
+#include "ase.h"
 #include "ca.h"
 #include "gc.h"
 #include "gc_comm.h"
@@ -19,9 +19,9 @@
 
 #ifdef THPOOL
 struct thpool_args_t {
-    struct apse_pp_t *pp;
-    struct apse_master_t *mpk;
-    struct apse_pk_t *pk;
+    struct ase_pp_t *pp;
+    struct ase_master_t *mpk;
+    struct ase_pk_t *pk;
     int result;
 };
 
@@ -29,18 +29,18 @@ static threadpool g_thpool;
 static struct thpool_args_t g_thpool_args;
 
 static void *
-thpool_apse_vrfy(void *vargs)
+thpool_ase_vrfy(void *vargs)
 {
     struct thpool_args_t *args = (struct thpool_args_t *) vargs;
 
-    args->result = apse_vrfy(args->pp, args->mpk, args->pk);
+    args->result = ase_vrfy(args->pp, args->mpk, args->pk);
 
     return NULL;
 }
 #endif  /* THPOOL */
 
 static int
-_connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
+_connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk)
 {
     abke_time_t _start, _end;
     _start = get_time();
@@ -56,7 +56,7 @@ _connect_to_ca(struct apse_pp_t *pp, struct apse_master_t *mpk)
 }
 
 static int
-_garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
+_garble(const struct ase_pp_t *pp, GarbledCircuit *gc, block *input_labels,
         block *output_labels, abke_time_t *total)
 {
     abke_time_t _start, _end;
@@ -73,13 +73,13 @@ _garble(const struct apse_pp_t *pp, GarbledCircuit *gc, block *input_labels,
 }
 
 static int
-_get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
+_get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
         int fd, abke_time_t *comm, abke_time_t *comp)
 {
     abke_time_t _start, _end;
 
     _start = get_time();
-    apse_pk_recv(pp, pk, fd);
+    ase_pk_recv(pp, pk, fd);
     _end = get_time();
     fprintf(stderr, "Receive public key: %f\n", _end - _start);
     if (comm)
@@ -91,9 +91,9 @@ _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
     g_thpool_args.mpk = mpk;
     g_thpool_args.pk = pk;
     g_thpool_args.result = 0;
-    thpool_add_work(g_thpool, thpool_apse_vrfy, &g_thpool_args);
+    thpool_add_work(g_thpool, thpool_ase_vrfy, &g_thpool_args);
 #else
-    if (!apse_vrfy(pp, mpk, pk)) {
+    if (!ase_vrfy(pp, mpk, pk)) {
         fprintf(stderr, "pk fails to verify\n");
         return -1;
     }
@@ -106,8 +106,8 @@ _get_pk(struct apse_pp_t *pp, struct apse_master_t *mpk, struct apse_pk_t *pk,
 }
 
 static int
-_encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
-         struct apse_ctxt_t *ctxt, element_t *inputs,
+_encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
+         struct ase_ctxt_t *ctxt, element_t *inputs,
          unsigned int *seed, abke_time_t *total)
 {
     abke_time_t _start, _end;
@@ -117,7 +117,7 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
             fprintf(stderr, "RAND_bytes failed\n");
             return -1;
         }
-        apse_enc(pp, pk, ctxt, inputs, seed);
+        ase_enc(pp, pk, ctxt, inputs, seed);
 #ifdef THPOOL
         thpool_wait(g_thpool);
         if (g_thpool_args.result != 1) {
@@ -134,7 +134,7 @@ _encrypt(struct apse_pp_t *pp, struct apse_pk_t *pk,
 }
 
 static int
-_send_randomness_and_inputs(const struct apse_pp_t *pp, block gc_seed,
+_send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
                             unsigned int enc_seed, element_t *inputs,
                             int fd, abke_time_t *total)
 {
@@ -177,10 +177,10 @@ server_go(const char *host, const char *port, int m, const char *param)
 {
     int sockfd = -1, fd = -1;
     block gc_seed, commitment;
-    struct apse_pp_t pp;
-    struct apse_master_t mpk;
-    struct apse_pk_t client_pk;
-    struct apse_ctxt_t ctxt;
+    struct ase_pp_t pp;
+    struct ase_master_t mpk;
+    struct ase_pk_t client_pk;
+    struct ase_ctxt_t ctxt;
     ExtGarbledCircuit egc;
     int gc_built = 0;
     element_t *inputs;
@@ -202,10 +202,10 @@ server_go(const char *host, const char *port, int m, const char *param)
 #ifdef THPOOL
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
-        apse_pp_init(&pp, m, param);
-        apse_mpk_init(&pp, &mpk);
-        apse_pk_init(&pp, &client_pk);
-        apse_ctxt_init(&pp, &ctxt);
+        ase_pp_init(&pp, m, param);
+        ase_mpk_init(&pp, &mpk);
+        ase_pk_init(&pp, &client_pk);
+        ase_ctxt_init(&pp, &ctxt);
         inputs = calloc(2 * pp.m, sizeof(element_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
@@ -286,7 +286,7 @@ server_go(const char *host, const char *port, int m, const char *param)
 
     _start = get_time();
     {
-        if (apse_ctxt_send(&pp, &ctxt, fd) == -1)
+        if (ase_ctxt_send(&pp, &ctxt, fd) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -388,10 +388,10 @@ cleanup:
         free(inputs);
         free(input_labels);
 
-        apse_ctxt_clear(&pp, &ctxt);
-        apse_pk_clear(&pp, &client_pk);
-        apse_mpk_clear(&pp, &mpk);
-        apse_pp_clear(&pp);
+        ase_ctxt_clear(&pp, &ctxt);
+        ase_pk_clear(&pp, &client_pk);
+        ase_mpk_clear(&pp, &mpk);
+        ase_pp_clear(&pp);
 
         if (gc_built)
             removeGarbledCircuit(&egc.gc);

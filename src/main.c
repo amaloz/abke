@@ -63,7 +63,7 @@ static int
 testall(struct args *args)
 {
     test_AND_circuit(args->attrs, args->m);
-    test_apse();
+    test_ase();
     return 0;
 }
 

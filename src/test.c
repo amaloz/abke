@@ -1,6 +1,6 @@
 #include "test.h"
 
-#include "apse.h"
+#include "ase.h"
 #include "util.h"
 
 #include <openssl/rand.h>
@@ -12,26 +12,26 @@
 
 
 int
-test_apse(void)
+test_ase(void)
 {
-    struct apse_pp_t pp;
-    struct apse_master_t master;
-    struct apse_pk_t pk;
-    struct apse_sk_t sk;
-    struct apse_pk_t rpk;
-    struct apse_sk_t rsk;
+    struct ase_pp_t pp;
+    struct ase_master_t master;
+    struct ase_pk_t pk;
+    struct ase_sk_t sk;
+    struct ase_pk_t rpk;
+    struct ase_sk_t rsk;
     int *attrs;
-    struct apse_ctxt_t ctxt;
+    struct ase_ctxt_t ctxt;
     element_t *inputs;
     element_t *ptxt;
 
-    apse_pp_init(&pp, 1, "a.param");
-    apse_master_init(&pp, &master);
-    apse_pk_init(&pp, &pk);
-    apse_sk_init(&pp, &sk);
-    apse_pk_init(&pp, &rpk);
-    apse_sk_init(&pp, &rsk);
-    apse_ctxt_init(&pp, &ctxt);
+    ase_pp_init(&pp, 1, "a.param");
+    ase_master_init(&pp, &master);
+    ase_pk_init(&pp, &pk);
+    ase_sk_init(&pp, &sk);
+    ase_pk_init(&pp, &rpk);
+    ase_sk_init(&pp, &rsk);
+    ase_ctxt_init(&pp, &ctxt);
     attrs = calloc(pp.m, sizeof(int));
     ptxt = calloc(pp.m, sizeof(element_t));
     for (int i = 0; i < pp.m; ++i) {
@@ -45,14 +45,14 @@ test_apse(void)
         element_random(inputs[i]);
     }
 
-    apse_gen(&pp, &master, &pk, &sk, attrs);
-    apse_unlink(&pp, &rpk, &rsk, &pk, &sk);
-    if (!apse_vrfy(&pp, &master, &rpk)) {
+    ase_gen(&pp, &master, &pk, &sk, attrs);
+    ase_unlink(&pp, &rpk, &rsk, &pk, &sk);
+    if (!ase_vrfy(&pp, &master, &rpk)) {
         fprintf(stderr, "VERIFICATION FAILED\n");
         return -1;
     }
-    apse_enc(&pp, &rpk, &ctxt, inputs, NULL);
-    apse_dec(&pp, &rsk, ptxt, &ctxt, attrs);
+    ase_enc(&pp, &rpk, &ctxt, inputs, NULL);
+    ase_dec(&pp, &rsk, ptxt, &ctxt, attrs);
     for (int i = 0; i < pp.m; ++i) {
         element_printf("%B\n%B\n%B\n\n", inputs[2 * i], inputs[2 * i + 1], ptxt[i]);
     }

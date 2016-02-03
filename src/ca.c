@@ -9,7 +9,7 @@
 #include <openssl/rand.h>
 
 static int
-loop(int sockfd, struct apse_pp_t *pp, struct apse_master_t *master)
+loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master)
 {
     int fd;
     enum role_e role;
@@ -34,22 +34,22 @@ loop(int sockfd, struct apse_pp_t *pp, struct apse_master_t *master)
         return -1;
     }
     
-    apse_mpk_send(pp, master, fd);
+    ase_mpk_send(pp, master, fd);
     if (role == ROLE_CLIENT) {
         int *attrs;
-        struct apse_pk_t pk;
-        struct apse_sk_t sk;
+        struct ase_pk_t pk;
+        struct ase_sk_t sk;
 
         attrs = calloc(pp->m, sizeof(int));
-        apse_pk_init(pp, &pk);
-        apse_sk_init(pp, &sk);
+        ase_pk_init(pp, &pk);
+        ase_sk_init(pp, &sk);
         net_recv(fd, attrs, sizeof(int) * pp->m, 0);
-        apse_gen(pp, master, &pk, &sk, attrs);
-        apse_pk_send(pp, &pk, fd);
-        apse_sk_send(pp, &sk, fd);
+        ase_gen(pp, master, &pk, &sk, attrs);
+        ase_pk_send(pp, &pk, fd);
+        ase_sk_send(pp, &sk, fd);
 
-        apse_sk_clear(pp, &sk);
-        apse_pk_clear(pp, &pk);
+        ase_sk_clear(pp, &sk);
+        ase_pk_clear(pp, &pk);
         free(attrs);
     }
     close(fd);
@@ -58,8 +58,8 @@ loop(int sockfd, struct apse_pp_t *pp, struct apse_master_t *master)
 }
 
 int
-ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, enum role_e role,
-        struct apse_pk_t *pk, struct apse_sk_t *sk, const int *attrs)
+ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
+        struct ase_pk_t *pk, struct ase_sk_t *sk, const int *attrs)
 {
     int cafd;
 
@@ -69,11 +69,11 @@ ca_info(struct apse_pp_t *pp, struct apse_master_t *mpk, enum role_e role,
     }
 
     net_send(cafd, &role, sizeof role, 0);
-    apse_mpk_recv(pp, mpk, cafd);
+    ase_mpk_recv(pp, mpk, cafd);
     if (role == ROLE_CLIENT) {
         net_send(cafd, attrs, sizeof(int) * pp->m, 0);
-        apse_pk_recv(pp, pk, cafd);
-        apse_sk_recv(pp, sk, cafd);
+        ase_pk_recv(pp, pk, cafd);
+        ase_sk_recv(pp, sk, cafd);
     }
     close(cafd);
     return 0;
@@ -83,8 +83,8 @@ int
 ca_init(const char *host, const char *port, int m, const char *param)
 {
     int sockfd;
-    struct apse_master_t master;
-    struct apse_pp_t pp;
+    struct ase_master_t master;
+    struct ase_pp_t pp;
     block seed;
 
     fprintf(stderr, "Starting CA with m = %d and pairing %s\n", m, param);
@@ -97,17 +97,17 @@ ca_init(const char *host, const char *port, int m, const char *param)
     (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
     (void) seedRandom(&seed);
 
-    if (apse_pp_init(&pp, m, param))
+    if (ase_pp_init(&pp, m, param))
         return -1;
-    apse_master_init(&pp, &master);
+    ase_master_init(&pp, &master);
 
     while (1) {
         if (loop(sockfd, &pp, &master) == -1)
             return -1;
     }
 
-    apse_master_clear(&pp, &master);
-    apse_pp_clear(&pp);
+    ase_master_clear(&pp, &master);
+    ase_pp_clear(&pp);
 
     return 0;
 }
