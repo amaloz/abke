@@ -17,6 +17,7 @@ struct args {
     char *port;
     int *attrs;
     char *param;
+    char *policy;
 };
 
 static void
@@ -24,11 +25,12 @@ args_init(struct args *args)
 {
     args->type = ASE_HOMOSIG;
     args->role = ROLE_NONE;
-    args->m = 16;
+    args->m = 2;
     args->host = "127.0.0.1";
     args->port = "1250";
     args->attrs = NULL;
-    args->param = "a.param";
+    args->param = "params/d224.param";
+    args->policy = NULL;
 }
 
 static struct option opts[] = {
@@ -37,6 +39,7 @@ static struct option opts[] = {
     {"client", no_argument, 0, 'c'},
     {"nattrs", required_argument, 0, 'm'},
     {"param", required_argument, 0, 'p'},
+    {"policy", required_argument, 0, 'P'},
     {"test", no_argument, 0, 't'},
     {0, 0, 0, 0}
 };
@@ -71,6 +74,13 @@ testall(struct args *args)
     return 0;
 }
 
+static int
+usage(void)
+{
+    /* TODO: write usage */
+    return EXIT_FAILURE;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -93,6 +103,9 @@ main(int argc, char *argv[])
         case 'p':
             args.param = optarg;
             break;
+        case 'P':
+            args.policy = optarg;
+            break;
         case 's':
             args.role = ROLE_SERVER;
             break;
@@ -102,6 +115,11 @@ main(int argc, char *argv[])
         default:
             break;
         }
+    }
+
+    if (args.role == ROLE_NONE) {
+        printf("Error: No role specified\n");
+        return usage();
     }
 
     args.attrs = calloc(args.m, sizeof(int));

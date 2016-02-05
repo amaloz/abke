@@ -13,6 +13,8 @@
 #define element_to_bytes_ element_to_bytes
 #define element_from_bytes_ element_from_bytes
 
+#define GARBLE_TYPE GARBLE_TYPE_HALFGATES
+
 size_t
 filesize(const char *fname);
 

@@ -12,6 +12,7 @@
 #endif
 
 #include <assert.h>
+#include <string.h>
 #include <unistd.h>
 #include <openssl/rand.h>
 
@@ -64,7 +65,7 @@ _garble(const struct ase_pp_t *pp, GarbledCircuit *gc, block *input_labels,
     _start = get_time();
     {
         build_AND_policy(gc, pp->m); /* XXX: hardcoded policy! */
-        garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE_STANDARD);
+        garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE);
     }
     _end = get_time();
     fprintf(stderr, "Garble circuit: %f\n", _end - _start);
@@ -242,7 +243,7 @@ server_go(const char *host, const char *port, int m, const char *param,
             map[0] = input_labels[2 * i + (choice ? 1 : 0)];
             map[1] = zero_block();
 
-            AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
+            AES_set_encrypt_key(blk, &key);
             AES_ecb_encrypt_blks(map, 2, &key);
 
             blk = element_to_block(inputs[2 * i + (choice ? 0 : 1)]);
@@ -250,7 +251,7 @@ server_go(const char *host, const char *port, int m, const char *param,
             map[0] = input_labels[2 * i + (choice ? 0 : 1)];
             map[1] = zero_block();
 
-            AES_set_encrypt_key((unsigned char *) &blk, 128, &key);
+            AES_set_encrypt_key(blk, &key);
             AES_ecb_encrypt_blks(map, 2, &key);
         }
         free(rand);
@@ -269,6 +270,9 @@ server_go(const char *host, const char *port, int m, const char *param,
 
     res = _connect_to_ca(&pp, &mpk, type);
     if (res == -1) goto cleanup;
+
+    /* Reset number of bytes sent/received after connection to CA */
+    g_bytes_sent = g_bytes_rcvd = 0;
 
     /* Initialize server and accept connection from client */
     if ((sockfd = net_init_server(host, port)) == -1) {
@@ -409,9 +413,12 @@ cleanup:
     comp += _end - _start;
 
     fprintf(stderr, "\n");
+    fprintf(stderr, "Computation:   %f\n", comp);
     fprintf(stderr, "Communication: %f\n", comm);
-    fprintf(stderr, "Computation: %f\n", comp);
-    fprintf(stderr, "Total time: %f\n", comm + comp);
+    fprintf(stderr, "  Bytes sent:     %d\n", g_bytes_sent);
+    fprintf(stderr, "  Bytes received: %d\n", g_bytes_rcvd);
+
+    fprintf(stderr, "Total time:    %f\n", comm + comp);
 
     printf("\nKEY: ");
     print_block(key);

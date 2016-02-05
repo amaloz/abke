@@ -12,6 +12,9 @@
 
 #define BACKLOG 5
 
+int g_bytes_sent = 0;
+int g_bytes_rcvd = 0;
+
 int
 net_send(int socket, const void *buffer, size_t length, int flags)
 {
@@ -27,6 +30,7 @@ net_send(int socket, const void *buffer, size_t length, int flags)
         total += n;
         bytesleft -= n;
     }
+    g_bytes_sent += length;
     return 0;
 }
 
@@ -45,6 +49,7 @@ net_recv(int socket, void *buffer, size_t length, int flags)
         total += n;
         bytesleft -= n;
     }
+    g_bytes_rcvd += length;
     return 0;
 }
 
@@ -105,8 +110,6 @@ net_init_server(const char *addr, const char *port)
         perror("listen");
         return -1;
     }
-
-    /* fprintf(stderr, "server: waiting for connections...\n"); */
 
     return sockfd;
 }

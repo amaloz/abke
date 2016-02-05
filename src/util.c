@@ -1,5 +1,6 @@
 #include "util.h"
 
+#include <string.h>
 #include <openssl/sha.h>
 #include <sys/stat.h>
 

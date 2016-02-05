@@ -8,7 +8,7 @@ gc_comm_send(int sock, ExtGarbledCircuit *egc)
     size_t size;
     int res = 0;
 
-    size = gc_size(&egc->gc);
+    size = gc_size(&egc->gc, false);
     if ((buf = malloc(size)) == NULL)
         return -1;
     gc2buf(&egc->gc, buf, false);

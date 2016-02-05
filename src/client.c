@@ -6,6 +6,7 @@
 #include "util.h"
 
 #include <assert.h>
+#include <string.h>
 #include <unistd.h>
 #include <openssl/sha.h>
 #include <openssl/rand.h>
@@ -52,7 +53,7 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
         for (int i = 0; i < pp->m; ++i) {
             blk = element_to_block(inputs[i]);
 
-            AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
+            AES_set_decrypt_key(blk, &key);
             memcpy(&tmp, &map[2 * i], sizeof(label_map_t));
             AES_ecb_decrypt_blks(tmp.map, 2, &key);
 
@@ -192,7 +193,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
         label_map_t map;
 
         blk = element_to_block(claimed_inputs[2 * i]);
-        AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
+        AES_set_decrypt_key(blk, &key);
         memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
         AES_ecb_decrypt_blks(map.map, 2, &key);
 
@@ -200,7 +201,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
             claimed_input_labels[2 * i] = map.map[0];
 
             blk = element_to_block(claimed_inputs[2 * i + 1]);
-            AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
+            AES_set_decrypt_key(blk, &key);
             memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
             AES_ecb_decrypt_blks(map.map, 2, &key);
             if (unequal_blocks(map.map[1], zero_block())) {
@@ -217,7 +218,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
             }
             claimed_input_labels[2 * i] = map.map[0];
             blk = element_to_block(claimed_inputs[2 * i + 1]);
-            AES_set_decrypt_key((unsigned char *) &blk, 128, &key);
+            AES_set_decrypt_key(blk, &key);
             memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
             AES_ecb_decrypt_blks(map.map, 2, &key);
             if (unequal_blocks(map.map[1], zero_block())) {
@@ -229,12 +230,12 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     }
 
     /* Regarble the circuit to verify that it was constructed correctly */
-    hashGarbledCircuit(&egc->gc, gc_hash, GARBLE_TYPE_STANDARD);
+    hashGarbledCircuit(&egc->gc, gc_hash, GARBLE_TYPE);
     build_AND_policy(&gc2, pp->m); /* XXX: hardcoded policy */
     (void) seedRandom(&gc_seed);
-    garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE_STANDARD);
+    garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE);
     gc_built = 1;
-    if (checkGarbledCircuit(&gc2, gc_hash, GARBLE_TYPE_STANDARD) != 0) {
+    if (checkGarbledCircuit(&gc2, gc_hash, GARBLE_TYPE) != 0) {
         printf("CHEAT: GCs don't check out\n");
         goto cleanup;
     }
@@ -306,6 +307,9 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs, type);
     if (res == -1) goto cleanup;
 
+    /* Reset number of bytes sent/received after connection to CA */
+    g_bytes_sent = g_bytes_rcvd = 0;
+
     _start = get_time();
     {
         ase_unlink(&pp, &pk, &sk, &pk, &sk, type);
@@ -355,7 +359,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        evaluate(&egc.gc, input_labels, &output_label, GARBLE_TYPE_STANDARD);
+        evaluate(&egc.gc, input_labels, &output_label, GARBLE_TYPE);
         gc_built = 1;
     }
     _end = get_time();
@@ -420,9 +424,12 @@ cleanup:
     comp += _end - _start;
 
     fprintf(stderr, "\n");
+    fprintf(stderr, "Computation:   %f\n", comp);
     fprintf(stderr, "Communication: %f\n", comm);
-    fprintf(stderr, "Computation: %f\n", comp);
-    fprintf(stderr, "Total time: %f\n", comm + comp);
+    fprintf(stderr, "  Bytes sent:     %d\n", g_bytes_sent);
+    fprintf(stderr, "  Bytes received: %d\n", g_bytes_rcvd);
+
+    fprintf(stderr, "Total time:    %f\n", comm + comp);
 
     printf("\nKEY: ");
     print_block(key);

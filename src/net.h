@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <pbc/pbc.h>
 
+extern int g_bytes_sent, g_bytes_rcvd;
+
 int
 net_send(int socket, const void *buffer, size_t length, int flags);
 
