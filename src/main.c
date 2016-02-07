@@ -81,8 +81,8 @@ go(struct args *args)
         struct measurement_t measurements;
         abke_time_t *comps = calloc(args->ntimes, sizeof(abke_time_t));
         abke_time_t *comms = calloc(args->ntimes, sizeof(abke_time_t));
-        size_t *bytes_sent = calloc(args->ntimes, sizeof(size_t));
-        size_t *bytes_rcvd = calloc(args->ntimes, sizeof(size_t));
+        size_t bytes_sent = 0;
+        size_t bytes_rcvd = 0;
         double *compMedians = calloc(args->ntimes, sizeof(double));
         double *commMedians = calloc(args->ntimes, sizeof(double));
         double meanComp, meanComm;
@@ -107,6 +107,14 @@ go(struct args *args)
                     assert(0);
                     abort();
                 }
+                if (bytes_sent == 0)
+                    bytes_sent = measurements.bytes_sent;
+                else
+                    assert(bytes_sent == measurements.bytes_sent);
+                if (bytes_rcvd == 0)
+                    bytes_rcvd = measurements.bytes_rcvd;
+                else
+                    assert(bytes_rcvd == measurements.bytes_rcvd);
                 comps[j] = measurements.comp;
                 comms[j] = measurements.comm;
             }
@@ -124,10 +132,10 @@ go(struct args *args)
         meanComm = doubleMean(commMedians, args->ntimes);
         switch (args->role) {
         case ROLE_SERVER:
-            printf("Server: %lf %lf\n", meanComp, meanComm);
+            printf("Server: %lf %lf %zu\n", meanComp, meanComm, bytes_sent);
             break;
         case ROLE_CLIENT:
-            printf("Client: %lf %lf\n", meanComp, meanComm);
+            printf("Client: %lf %lf %zu\n", meanComp, meanComm, bytes_sent);
             break;
         default:
             assert(0);
@@ -136,8 +144,6 @@ go(struct args *args)
 
         free(comps);
         free(comms);
-        free(bytes_sent);
-        free(bytes_rcvd);
     }
 
     return 0;

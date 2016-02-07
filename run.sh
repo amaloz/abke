@@ -2,6 +2,8 @@ NTIMES=2
 
 mkdir -p logs
 
+# tc qdisc add dev lo root handle 1:0 netem delay 100msec
+
 for M in 10 100 1000
 do
 
@@ -14,4 +16,4 @@ do
     done
 done
 
-
+# tc qdisc del dev lo root
