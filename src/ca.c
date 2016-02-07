@@ -1,4 +1,4 @@
-#include "ca.h"
+#include "party.h"
 
 #include "net.h"
 #include "util.h"
@@ -82,13 +82,14 @@ ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
 }
 
 int
-ca_init(const char *host, const char *port, int m, const char *param,
-        enum ase_type_e type)
+ca_init(const char *host, const char *port, int m, int ntimes,
+        const char *param, enum ase_type_e type)
 {
     int sockfd;
     struct ase_master_t master;
     struct ase_pp_t pp;
     block seed;
+    int nconnected = 0;
 
     fprintf(stderr, "Starting CA with m = %d and pairing %s\n", m, param);
     
@@ -104,9 +105,10 @@ ca_init(const char *host, const char *port, int m, const char *param,
         return -1;
     ase_master_init(&pp, &master, type);
 
-    while (1) {
+    while (nconnected < 2 * ntimes * ntimes) {
         if (loop(sockfd, &pp, &master, type) == -1)
             return -1;
+        nconnected++;
     }
 
     ase_master_clear(&pp, &master, type);

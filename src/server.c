@@ -1,5 +1,5 @@
-#include "ase.h"
-#include "ca.h"
+#include "party.h"
+
 #include "gc.h"
 #include "gc_comm.h"
 #include "net.h"
@@ -54,23 +54,6 @@ _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
     }
     _end = get_time();
     fprintf(stderr, "Get CA info: %f\n", _end - _start);
-    return 0;
-}
-
-static int
-_garble(const struct ase_pp_t *pp, GarbledCircuit *gc, block *input_labels,
-        block *output_labels, abke_time_t *total)
-{
-    abke_time_t _start, _end;
-    _start = get_time();
-    {
-        build_AND_policy(gc, pp->m); /* XXX: hardcoded policy! */
-        garbleCircuit(gc, input_labels, output_labels, GARBLE_TYPE);
-    }
-    _end = get_time();
-    fprintf(stderr, "Garble circuit: %f\n", _end - _start);
-    if (total)
-        *total += _end - _start;
     return 0;
 }
 
@@ -175,7 +158,8 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
 
 
 int
-server_go(const char *host, const char *port, int m, const char *param,
+server_go(const char *host, const char *port, int m, int q,
+          const char *param, struct measurement_t *measurements,
           enum ase_type_e type)
 {
     int sockfd = -1, fd = -1;
@@ -264,8 +248,14 @@ server_go(const char *host, const char *port, int m, const char *param,
      * same state as now */
     (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
     (void) seedRandom(&gc_seed);
-    res = _garble(&pp, &egc.gc, input_labels, output_labels, &comp);
-    if (res == -1) goto cleanup;
+        _start = get_time();
+    {
+        build_AND_policy(&egc.gc, pp.m, q);
+        (void) garbleCircuit(&egc.gc, input_labels, output_labels, GARBLE_TYPE);
+    }
+    _end = get_time();
+    fprintf(stderr, "Garble circuit: %f\n", _end - _start);
+    comp += _end - _start;
     gc_built = 1;
 
     res = _connect_to_ca(&pp, &mpk, type);
@@ -420,9 +410,14 @@ cleanup:
 
     fprintf(stderr, "Total time:    %f\n", comm + comp);
 
-    printf("\nKEY: ");
-    print_block(key);
-    printf("\n");
+    measurements->comp = comp;
+    measurements->comm = comm;
+    measurements->bytes_sent = g_bytes_sent;
+    measurements->bytes_rcvd = g_bytes_rcvd;
+
+    fprintf(stderr, "\nKEY: ");
+    print_block(stderr, key);
+    fprintf(stderr, "\n");
 
     return res;
 }

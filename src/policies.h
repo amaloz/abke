@@ -4,6 +4,6 @@
 #include "justGarble.h"
 
 void
-build_AND_policy(GarbledCircuit *gc, int n);
+build_AND_policy(GarbledCircuit *gc, int n, int nlayers);
 
 #endif

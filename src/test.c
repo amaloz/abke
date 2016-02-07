@@ -65,7 +65,7 @@ test_ase(void)
 }
 
 int
-test_AND_circuit(const int *attrs, int n)
+test_AND_circuit(const int *attrs, int n, int nlayers)
 {
     GarbledCircuit gc;
     block *inputs, *extracted, outputs[2], output;
@@ -82,14 +82,14 @@ test_AND_circuit(const int *attrs, int n)
         extracted[i] = inputs[2 * i + attrs[i]];
     }
     printf("\n");
-    build_AND_policy(&gc, n);
+    build_AND_policy(&gc, n, nlayers);
     garbleCircuit(&gc, inputs, outputs, GARBLE_TYPE_STANDARD);
-    print_block(outputs[0]);
+    print_block(stderr, outputs[0]);
     printf(" ");
-    print_block(outputs[1]);
+    print_block(stderr, outputs[1]);
     printf("\n");
     evaluate(&gc, extracted, &output, GARBLE_TYPE_STANDARD);
-    print_block(output);
+    print_block(stderr, output);
     printf("\n");
 
     free(inputs);

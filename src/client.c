@@ -1,5 +1,5 @@
-#include "ase.h"
-#include "ca.h"
+#include "party.h"
+
 #include "gc.h"
 #include "gc_comm.h"
 #include "net.h"
@@ -112,8 +112,8 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 
 static int
 _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
-       struct ase_ctxt_t *ctxt, const int *attrs, int fd, abke_time_t *comm,
-       abke_time_t *comp, enum ase_type_e type)
+       struct ase_ctxt_t *ctxt, const int *attrs, int q, int fd,
+       abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
 {
     GarbledCircuit gc2;
     int gc_built = 0;
@@ -231,7 +231,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
 
     /* Regarble the circuit to verify that it was constructed correctly */
     hashGarbledCircuit(&egc->gc, gc_hash, GARBLE_TYPE);
-    build_AND_policy(&gc2, pp->m); /* XXX: hardcoded policy */
+    build_AND_policy(&gc2, pp->m, q);
     (void) seedRandom(&gc_seed);
     garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE);
     gc_built = 1;
@@ -267,7 +267,8 @@ cleanup:
 
 int
 client_go(const char *host, const char *port, const int *attrs, int m,
-          const char *param, enum ase_type_e type)
+          int q, const char *param, struct measurement_t *measurements,
+          enum ase_type_e type)
 {
     int fd = -1;
     struct ase_pp_t pp;
@@ -368,7 +369,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     res = _commit(output_label, &decom, fd, &comm, &comp);
     if (res == -1) goto cleanup;
-    res = _check(&pp, &pk, &egc, &ctxt, attrs, fd, &comm, &comp, type);
+    res = _check(&pp, &pk, &egc, &ctxt, attrs, q, fd, &comm, &comp, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();
@@ -431,9 +432,14 @@ cleanup:
 
     fprintf(stderr, "Total time:    %f\n", comm + comp);
 
-    printf("\nKEY: ");
-    print_block(key);
-    printf("\n");
+    measurements->comp = comp;
+    measurements->comm = comm;
+    measurements->bytes_sent = g_bytes_sent;
+    measurements->bytes_rcvd = g_bytes_rcvd;
+
+    fprintf(stderr, "\nKEY: ");
+    print_block(stderr, key);
+    fprintf(stderr, "\n");
 
     return res;
 }
