@@ -64,25 +64,29 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
     abke_time_t _start, _end;
 
     _start = get_time();
-    ase_pk_recv(pp, pk, fd, type);
+    {
+        ase_pk_recv(pp, pk, fd, type);
+    }
     _end = get_time();
     fprintf(stderr, "Receive public key: %f\n", _end - _start);
     if (comm)
         *comm += _end - _start;
 
     _start = get_time();
+    {
 #ifdef THPOOL
-    g_thpool_args.pp = pp;
-    g_thpool_args.mpk = mpk;
-    g_thpool_args.pk = pk;
-    g_thpool_args.result = 0;
-    thpool_add_work(g_thpool, thpool_ase_vrfy, &g_thpool_args);
+        g_thpool_args.pp = pp;
+        g_thpool_args.mpk = mpk;
+        g_thpool_args.pk = pk;
+        g_thpool_args.result = 0;
+        thpool_add_work(g_thpool, thpool_ase_vrfy, &g_thpool_args);
 #else
-    if (!ase_vrfy(pp, mpk, pk, type)) {
-        fprintf(stderr, "pk fails to verify\n");
-        return -1;
-    }
+        if (!ase_vrfy(pp, mpk, pk, type)) {
+            fprintf(stderr, "pk fails to verify\n");
+            return -1;
+        }
 #endif
+    }
     _end = get_time();
     fprintf(stderr, "Verify public key: %f\n", _end - _start);
     if (comp)
@@ -178,6 +182,16 @@ server_go(const char *host, const char *port, int m, int q,
     int res = -1;
 
     fprintf(stderr, "Starting server with m = %d and pairing %s\n", m, param);
+    fprintf(stderr, "Measurement type: ");
+    switch (measurements->type) {
+    case MEASUREMENT_TYPE_FULL:
+        fprintf(stderr, "Full\n");
+        break;
+    case MEASUREMENT_TYPE_ONLINE:
+        fprintf(stderr, "Online\n");
+        break;
+    }
+
 #ifdef THPOOL
     fprintf(stderr, "Using thread pool\n");
 #endif
@@ -203,10 +217,12 @@ server_go(const char *host, const char *port, int m, int q,
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
         (void) seedRandom(&seed);
         createInputLabels(input_labels, pp.m);
+        (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
-    comp += _end - _start;
+    if (measurements->type == MEASUREMENT_TYPE_FULL)
+        comp += _end - _start;
 
     _start = get_time();
     {
@@ -242,7 +258,8 @@ server_go(const char *host, const char *port, int m, int q,
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs and label map: %f\n", _end - _start);
-    comp += _end - _start;
+    if (measurements->type == MEASUREMENT_TYPE_FULL)
+        comp += _end - _start;
 
     /* Need to re-seed before garbling so that when re-garbling we'll be in the
      * same state as now */
@@ -252,11 +269,12 @@ server_go(const char *host, const char *port, int m, int q,
     {
         build_AND_policy(&egc.gc, pp.m, q);
         (void) garbleCircuit(&egc.gc, input_labels, output_labels, GARBLE_TYPE);
+        gc_built = 1;
     }
     _end = get_time();
     fprintf(stderr, "Garble circuit: %f\n", _end - _start);
-    comp += _end - _start;
-    gc_built = 1;
+    if (measurements->type == MEASUREMENT_TYPE_FULL)
+        comp += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk, type);
     if (res == -1) goto cleanup;
@@ -274,9 +292,14 @@ server_go(const char *host, const char *port, int m, int q,
         exit(EXIT_FAILURE);
     }
 
+    /* if measuring online time, it should be zero at this point */
+    if (measurements->type == MEASUREMENT_TYPE_ONLINE)
+        assert(comp == 0.0);
     res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp, type);
+    if (measurements->type == MEASUREMENT_TYPE_ONLINE)
+        /* divide by four to mimic 5-user batching of pk verification */
+        comp /= 4;
     if (res == -1) goto cleanup;
-    (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp, type);
     if (res == -1) goto cleanup;
 

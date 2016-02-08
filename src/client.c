@@ -285,6 +285,15 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     int res = -1;
 
     fprintf(stderr, "Starting client with m = %d and pairing %s\n", m, param);
+    fprintf(stderr, "Measurement type: ");
+    switch (measurements->type) {
+    case MEASUREMENT_TYPE_FULL:
+        fprintf(stderr, "Full\n");
+        break;
+    case MEASUREMENT_TYPE_ONLINE:
+        fprintf(stderr, "Online\n");
+        break;
+    }
     fprintf(stderr, "Attribute vector: ");
     for (int i = 0; i < m; ++i) {
         fprintf(stderr, "%d", attrs[i]);
@@ -303,7 +312,8 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
-    comp += _end - _start;
+    if (measurements->type == MEASUREMENT_TYPE_FULL)
+        comp += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs, type);
     if (res == -1) goto cleanup;
@@ -317,7 +327,8 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);
-    comp += _end - _start;
+    if (measurements->type == MEASUREMENT_TYPE_FULL)
+        comp += _end - _start;
 
     /* Connect to server */
     if ((fd = net_init_client(host, port)) == -1) {
@@ -352,10 +363,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     fprintf(stderr, "Receive garbled circuit: %f\n", _end - _start);
     comm += _end - _start;
 
-    {
-        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp,
-                       type);
-    }
+    res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();

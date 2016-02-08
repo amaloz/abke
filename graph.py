@@ -6,14 +6,14 @@ from pylab import *
 def graph(ms, server, client, ssents, csents, fname):
     width = 0.8 / (2 * len(ms))
 
-    fig = plt.figure(figsize=(8,6))
+    fig = plt.figure(figsize=(8,4))
     ax = fig.add_subplot(1,1,1)
     axx = ax.twiny()
     ax.set_xlim((0.0, 3.0))
 
     if ssents is not None and csents is not None:
         axy = ax.twinx()
-        axy.set_ylim((0, 80000))
+        axy.set_ylim((0, 90000))
         axy.set_ylabel('data sent (Kb)')
         axy.set_xlim((0.0, 3.0))
     else:
@@ -35,7 +35,7 @@ def graph(ms, server, client, ssents, csents, fname):
         if axy is not None:
             s1 = axy.scatter(np.array(ind) - width / 2, ssents[m], color=dotcolors[0])
             s2 = axy.scatter(np.array(ind) + width / 2, csents[m], color=dotcolors[1])
-            axy.legend((s1, s2), ('Server', 'Client'), loc='upper right')
+            axy.legend((s1, s2), ('Server bytes sent', 'Client bytes sent'), loc='upper right')
     total = np.array(total)
     ax.set_xlabel('number of gates')
     ax.set_xticks(total + width)
@@ -50,22 +50,38 @@ def graph(ms, server, client, ssents, csents, fname):
     axx.set_xticks(np.array([0.5, 1.5, 2.5]))
     axx.set_xticklabels(['$10$', '$100$', '$1000$'])
 
-    ax.legend((r1[0], r2[0]), ('Server', 'Client'), loc='upper left')
+    ax.legend((r1[0], r2[0]), ('Server time', 'Client time'), loc='upper left')
     fig.savefig(fname)
     # show()
 
 def main(argv):
     qs = {}
     scomps, scomms, ccomps, ccomms, ssents, csents = {}, {}, {}, {}, {}, {}
+    fig_width_pt = 550.0
+    inches_per_pt = 1.0 / 72.27
+    golden_mean = (sqrt(5) - 1.0) / 5.0
+    fig_width = fig_width_pt * inches_per_pt
+    fig_height = fig_width * golden_mean
+    fig_size = [fig_width, fig_height]
+    params = {'backend': 'ps',
+              'axes.labelsize': 12,
+              'font.size': 12,
+              'legend.fontsize': 12,
+              'xtick.labelsize': 12,
+              'ytick.labelsize': 12,
+              'text.usetex': True,
+              'figure.figsize': fig_size
+    }
+    plt.rcParams.update(params)
     plt.rcParams['text.usetex'] = True
-    plt.rcParams['font.size'] = 14
-    plt.rcParams['font.family'] = 'Computer Modern'
-    plt.rcParams['axes.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['axes.titlesize'] = 1.5*plt.rcParams['font.size']
-    plt.rcParams['legend.fontsize'] = plt.rcParams['font.size']
-    plt.rcParams['xtick.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['ytick.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['legend.frameon'] = False
+    # plt.rcParams['font.size'] = 14
+    # plt.rcParams['font.family'] = 'Computer Modern'
+    # plt.rcParams['axes.labelsize'] = plt.rcParams['font.size']
+    # plt.rcParams['axes.titlesize'] = 1.5*plt.rcParams['font.size']
+    # plt.rcParams['legend.fontsize'] = plt.rcParams['font.size']
+    # plt.rcParams['xtick.labelsize'] = plt.rcParams['font.size']
+    # plt.rcParams['ytick.labelsize'] = plt.rcParams['font.size']
+    # plt.rcParams['legend.frameon'] = False
     # plt.rcParams['legend.loc'] = 'upper right'
     plt.rcParams['axes.linewidth'] = 1
 

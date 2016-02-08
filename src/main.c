@@ -12,6 +12,7 @@
 struct args {
     enum role_e role;
     enum ase_type_e type;
+    enum measurement_type_e measurement_type;
     int m;
     int ngates;
     int ntimes;
@@ -27,6 +28,7 @@ args_init(struct args *args)
 {
     args->type = ASE_HOMOSIG;
     args->role = ROLE_NONE;
+    args->measurement_type = MEASUREMENT_TYPE_FULL;
     args->m = 2;
     args->ngates = args->m - 1;
     args->ntimes = 1;
@@ -42,6 +44,7 @@ static struct option opts[] = {
     {"server", no_argument, 0, 's'},
     {"client", no_argument, 0, 'c'},
     {"nattrs", required_argument, 0, 'm'},
+    {"measure-online", no_argument, 0, 'o'},
     {"param", required_argument, 0, 'p'},
     {"policy", required_argument, 0, 'P'},
     {"ngates", required_argument, 0, 'q'},
@@ -49,7 +52,7 @@ static struct option opts[] = {
     {"test", no_argument, 0, 'T'},
     {0, 0, 0, 0}
 };
-static char *short_opts = "acm:p:q:st:T";
+static char *short_opts = "acm:op:q:st:T";
 
 static int
 compare(const void * a, const void * b)
@@ -86,6 +89,8 @@ go(struct args *args)
         double *compMedians = calloc(args->ntimes, sizeof(double));
         double *commMedians = calloc(args->ntimes, sizeof(double));
         double meanComp, meanComm;
+
+        measurements.type = args->measurement_type;
 
         if (args->ngates < args->m - 1)
             args->ngates = args->m - 1;
@@ -182,6 +187,9 @@ main(int argc, char *argv[])
             break;
         case 'm':
             args.m = atoi(optarg);
+            break;
+        case 'o':
+            args.measurement_type = MEASUREMENT_TYPE_ONLINE;
             break;
         case 'p':
             args.param = optarg;
