@@ -1,9 +1,7 @@
-NTIMES=10
-# ONLINE=-o
+NTIMES=1
+ONLINE=-o
 
 mkdir -p logs
-
-# sudo tc qdisc add dev lo root handle 1:0 netem delay 100msec
 
 for M in 10 100 1000
 do
@@ -16,5 +14,3 @@ do
         ./a.out --client -m $M -q $NLAYERS -t $NTIMES $ONLINE 2>logs/client.$M.$NLAYERS.log
     done
 done
-
-# sudo tc qdisc del dev lo root

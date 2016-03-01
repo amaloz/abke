@@ -11,6 +11,7 @@
 #include <openssl/sha.h>
 #include <openssl/rand.h>
 
+#include <garble/aes.h>
 #include "policies.h"
 
 static int
@@ -57,7 +58,7 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
             memcpy(&tmp, &map[2 * i], sizeof(label_map_t));
             AES_ecb_decrypt_blks(tmp.map, 2, &key);
 
-            if (equal_blocks(tmp.map[1], zero_block())) {
+            if (garble_equal(tmp.map[1], garble_zero_block())) {
                 input_labels[i] = tmp.map[0];
             } else {
                 memcpy(&tmp, &map[2 * i + 1], sizeof(label_map_t));
@@ -115,7 +116,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
        struct ase_ctxt_t *ctxt, const int *attrs, int q, int fd,
        abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
 {
-    GarbledCircuit gc2;
+    garble_circuit gc2;
     int gc_built = 0;
     unsigned char gc_hash[SHA_DIGEST_LENGTH];
     struct ase_ctxt_t claimed_ctxt;
@@ -137,7 +138,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
         for (int i = 0; i < 2 * pp->m; ++i) {
             element_init_G1(claimed_inputs[i], pp->pairing);
         }
-        claimed_input_labels = allocate_blocks(2 * pp->m);
+        claimed_input_labels = garble_allocate_blocks(2 * pp->m);
         flipped_attrs = calloc(pp->m, sizeof(int));
         for (int i = 0; i < pp->m; ++i) {
             flipped_attrs[i] = !attrs[i];
@@ -197,14 +198,14 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
         memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
         AES_ecb_decrypt_blks(map.map, 2, &key);
 
-        if (equal_blocks(map.map[1], zero_block())) {
+        if (garble_equal(map.map[1], garble_zero_block())) {
             claimed_input_labels[2 * i] = map.map[0];
 
             blk = element_to_block(claimed_inputs[2 * i + 1]);
             AES_set_decrypt_key(blk, &key);
             memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
             AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (unequal_blocks(map.map[1], zero_block())) {
+            if (garble_unequal(map.map[1], garble_zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
@@ -212,7 +213,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
         } else {
             memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
             AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (unequal_blocks(map.map[1], zero_block())) {
+            if (garble_unequal(map.map[1], garble_zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
@@ -221,7 +222,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
             AES_set_decrypt_key(blk, &key);
             memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
             AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (unequal_blocks(map.map[1], zero_block())) {
+            if (garble_unequal(map.map[1], garble_zero_block())) {
                 printf("CHEAT: input %d doesn't map to valid wire label\n", i);
                 goto cleanup;
             }
@@ -230,12 +231,12 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     }
 
     /* Regarble the circuit to verify that it was constructed correctly */
-    hashGarbledCircuit(&egc->gc, gc_hash, GARBLE_TYPE);
+    garble_hash(&egc->gc, gc_hash);
     build_AND_policy(&gc2, pp->m, q);
-    (void) seedRandom(&gc_seed);
-    garbleCircuit(&gc2, claimed_input_labels, NULL, GARBLE_TYPE);
+    (void) garble_seed(&gc_seed);
+    garble_garble(&gc2, claimed_input_labels, NULL);
     gc_built = 1;
-    if (checkGarbledCircuit(&gc2, gc_hash, GARBLE_TYPE) != 0) {
+    if (garble_check(&gc2, gc_hash) != 0) {
         printf("CHEAT: GCs don't check out\n");
         goto cleanup;
     }
@@ -252,7 +253,7 @@ cleanup:
     ase_ctxt_clear(pp, &claimed_ctxt, type);
 
     if (gc_built)
-        removeGarbledCircuit(&gc2);
+        garble_delete(&gc2);
 
     _end = get_time();
     _comp += _end - _start;
@@ -278,7 +279,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     struct ase_ctxt_t ctxt;
     block *input_labels;
     block output_label, decom;
-    block key = zero_block();
+    block key = garble_zero_block();
     ExtGarbledCircuit egc;
     int gc_built = 0;
     abke_time_t _start, _end, comm = 0.0, comp = 0.0;
@@ -307,7 +308,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         ase_pk_init(&pp, &pk, type);
         ase_sk_init(&pp, &sk, type);
         ase_ctxt_init(&pp, &ctxt, type);
-        input_labels = allocate_blocks(pp.m);
+        input_labels = garble_allocate_blocks(pp.m);
         egc.map = NULL;
     }
     _end = get_time();
@@ -368,7 +369,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        evaluate(&egc.gc, input_labels, &output_label, GARBLE_TYPE);
+        garble_eval(&egc.gc, input_labels, &output_label);
         gc_built = 1;
     }
     _end = get_time();
@@ -391,7 +392,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        block a, acom, b = zero_block();
+        block a, acom, b = garble_zero_block();
         if (RAND_bytes((unsigned char *) &b, sizeof b) == 0) {
             fprintf(stderr, "RAND_bytes failed\n");
             goto cleanup;
@@ -399,11 +400,11 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         net_recv(fd, &acom, sizeof acom, 0);
         net_send(fd, &b, sizeof b, 0);
         net_recv(fd, &a, sizeof a, 0);
-        if (unequal_blocks(acom, commit(a, zero_block()))) {
+        if (garble_unequal(acom, commit(a, garble_zero_block()))) {
             printf("CHEAT: invalid commitment\n");
             goto cleanup;
         }
-        key = xorBlocks(a, b);
+        key = garble_xor(a, b);
     }
     _end = get_time();
     fprintf(stderr, "Coin tossing: %f\n", _end - _start);
@@ -421,7 +422,7 @@ cleanup:
         ase_pp_clear(&pp);
 
         if (gc_built)
-            removeGarbledCircuit(&egc.gc);
+            garble_delete(&egc.gc);
         if (egc.map)
             free(egc.map);
 
@@ -445,9 +446,7 @@ cleanup:
     measurements->bytes_sent = g_bytes_sent;
     measurements->bytes_rcvd = g_bytes_rcvd;
 
-    fprintf(stderr, "\nKEY: ");
-    print_block(stderr, key);
-    fprintf(stderr, "\n");
+    block_fprintf(stderr, "\nKEY: %B\n", key);
 
     return res;
 }

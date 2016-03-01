@@ -128,10 +128,10 @@ go(struct args *args)
         }
         fprintf(stderr, "\n");
         {
-            GarbledCircuit gc;
+            garble_circuit gc;
             build_AND_policy(&gc, args->m, args->ngates);
-            fprintf(stderr, "%d %d\n", gc.n, gc.q);
-            removeGarbledCircuit(&gc);
+            fprintf(stderr, "%lu %lu\n", gc.n, gc.q);
+            garble_delete(&gc);
         }
         meanComp = doubleMean(compMedians, args->ntimes);
         meanComm = doubleMean(commMedians, args->ntimes);

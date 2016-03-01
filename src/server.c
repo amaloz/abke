@@ -15,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <openssl/rand.h>
+#include <garble/aes.h>
 
 #include "policies.h"
 
@@ -176,7 +177,7 @@ server_go(const char *host, const char *port, int m, int q,
     int gc_built = 0;
     element_t *inputs;
     block *input_labels, output_labels[2];
-    block key = zero_block();
+    block key = garble_zero_block();
     unsigned int enc_seed;
     abke_time_t _start, _end, comm = 0.0, comp = 0.0;
     int res = -1;
@@ -212,11 +213,11 @@ server_go(const char *host, const char *port, int m, int q,
             element_init_G1(inputs[i], pp.pairing);
         }
         egc.map = calloc(2 * pp.m, sizeof(label_map_t));
-        input_labels = allocate_blocks(2 * pp.m);
+        input_labels = garble_allocate_blocks(2 * pp.m);
         /* Need to call seedRandom for createInputLabels() */
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
-        (void) seedRandom(&seed);
-        createInputLabels(input_labels, pp.m);
+        (void) garble_seed(&seed);
+        garble_create_input_labels(input_labels, pp.m, NULL);
         (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     }
     _end = get_time();
@@ -241,7 +242,7 @@ server_go(const char *host, const char *port, int m, int q,
             blk = element_to_block(inputs[2 * i + (choice ? 1 : 0)]);
             map = egc.map[2 * i].map;
             map[0] = input_labels[2 * i + (choice ? 1 : 0)];
-            map[1] = zero_block();
+            map[1] = garble_zero_block();
 
             AES_set_encrypt_key(blk, &key);
             AES_ecb_encrypt_blks(map, 2, &key);
@@ -249,7 +250,7 @@ server_go(const char *host, const char *port, int m, int q,
             blk = element_to_block(inputs[2 * i + (choice ? 0 : 1)]);
             map = egc.map[2 * i + 1].map;
             map[0] = input_labels[2 * i + (choice ? 0 : 1)];
-            map[1] = zero_block();
+            map[1] = garble_zero_block();
 
             AES_set_encrypt_key(blk, &key);
             AES_ecb_encrypt_blks(map, 2, &key);
@@ -264,11 +265,11 @@ server_go(const char *host, const char *port, int m, int q,
     /* Need to re-seed before garbling so that when re-garbling we'll be in the
      * same state as now */
     (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
-    (void) seedRandom(&gc_seed);
+    (void) garble_seed(&gc_seed);
         _start = get_time();
     {
         build_AND_policy(&egc.gc, pp.m, q);
-        (void) garbleCircuit(&egc.gc, input_labels, output_labels, GARBLE_TYPE);
+        (void) garble_garble(&egc.gc, input_labels, output_labels);
         gc_built = 1;
     }
     _end = get_time();
@@ -350,11 +351,11 @@ server_go(const char *host, const char *port, int m, int q,
         _start = get_time();
         {
             block tmp = commit(output_label, r);
-            if (unequal_blocks(commitment, tmp)) {
+            if (garble_unequal(commitment, tmp)) {
                 printf("CHEAT: commitments not equal\n");
                 goto cleanup;
             }
-            if (unequal_blocks(output_label, output_labels[1])) {
+            if (garble_unequal(output_label, output_labels[1])) {
                 printf("CHEAT: not 1-bit output label\n");
                 goto cleanup;
             }
@@ -374,7 +375,7 @@ server_go(const char *host, const char *port, int m, int q,
                 fprintf(stderr, "RAND_bytes failed\n");
                 goto cleanup;
             }
-            acom = commit(a, zero_block());
+            acom = commit(a, garble_zero_block());
         }
         _end = get_time();
         fprintf(stderr, "Compute commitment for coin tossing: %f\n", _end - _start);
@@ -385,7 +386,7 @@ server_go(const char *host, const char *port, int m, int q,
             net_send(fd, &acom, sizeof acom, 0);
             net_recv(fd, &b, sizeof b, 0);
             net_send(fd, &a, sizeof a, 0);
-            key = xorBlocks(a, b);
+            key = garble_xor(a, b);
         }
         _end = get_time();
         fprintf(stderr, "Coin tossing: %f\n", _end - _start);
@@ -413,7 +414,7 @@ cleanup:
         ase_pp_clear(&pp);
 
         if (gc_built)
-            removeGarbledCircuit(&egc.gc);
+            garble_delete(&egc.gc);
         free(egc.map);
 
         if (fd != -1)
@@ -438,9 +439,7 @@ cleanup:
     measurements->bytes_sent = g_bytes_sent;
     measurements->bytes_rcvd = g_bytes_rcvd;
 
-    fprintf(stderr, "\nKEY: ");
-    print_block(stderr, key);
-    fprintf(stderr, "\n");
+    block_fprintf(stderr, "\nKEY: %B\n", key);
 
     return res;
 }

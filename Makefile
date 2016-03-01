@@ -1,21 +1,18 @@
 SRCDIR := src
 
-JUSTGARBLE = JustGarble
 SOURCES := $(wildcard $(SRCDIR)/*.c)
 OBJECTS  := $(SOURCES:$(SRCDIR)/%.c=$(SRCDIR)/%.o)
-
-JUSTGARBLESRC := $(wildcard $(JUSTGARBLE)/src/*.c)
 
 INCLUDES := $(wildcard $(SRCDIR)/*.h)
 
 CC=clang
 CFLAGS=-O3 -Wall -Isrc/ -I$(JUSTGARBLE)/include -maes -msse4 -march=native # -DPBC_DEBUG
-LIBS=-lmsgpackc -lm -lcrypto -lssl -lgmp -lpbc -lpthread
+LIBS=-lmsgpackc -lm -lcrypto -lssl -lgmp -lpbc -lpthread -lgarble -lgarblec -L/usr/local/lib
 
 all: main
 
 main: $(OBJECTS)
-	$(CC) $(SOURCES) $(JUSTGARBLESRC) $(LIBS) $(CFLAGS) 
+	$(CC) $(SOURCES) $(LIBS) $(CFLAGS) 
 
 PHONEY: clean
 clean:

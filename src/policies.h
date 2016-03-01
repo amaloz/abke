@@ -1,9 +1,9 @@
 #ifndef POLICIES_H
 #define POLICIES_H
 
-#include "justGarble.h"
+#include "garble.h"
 
 void
-build_AND_policy(GarbledCircuit *gc, int n, int nlayers);
+build_AND_policy(garble_circuit *gc, int n, int nlayers);
 
 #endif

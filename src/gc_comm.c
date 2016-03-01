@@ -8,10 +8,10 @@ gc_comm_send(int sock, ExtGarbledCircuit *egc)
     size_t size;
     int res = 0;
 
-    size = gc_size(&egc->gc, false);
+    size = garble_size(&egc->gc, false);
     if ((buf = malloc(size)) == NULL)
         return -1;
-    gc2buf(&egc->gc, buf, false);
+    garble_to_buffer(&egc->gc, buf, false);
     if ((res = net_send(sock, &size, sizeof size, 0)) == -1)
         goto cleanup;
     res = net_send(sock, buf, size, 0);
@@ -34,7 +34,7 @@ gc_comm_recv(int sock, ExtGarbledCircuit *egc)
         return -1;
     if ((res = net_recv(sock, buf, size, 0)) == -1)
         goto cleanup;
-    res = buf2gc(&egc->gc, buf, false);
+    res = garble_from_buffer(&egc->gc, buf, false);
     egc->map = calloc(2 * egc->gc.n, sizeof(label_map_t));
     net_recv(sock, egc->map, 2 * egc->gc.n * sizeof(label_map_t), 0);
 

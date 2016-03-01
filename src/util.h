@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <pbc/pbc.h>
 #include <pbc/pbc_test.h>
-#include "justGarble.h"
+#include "garble.h"
 
 #define CA_HOST "127.0.0.1"
 #define CA_PORT "8000"
@@ -14,6 +14,19 @@
 #define element_from_bytes_ element_from_bytes
 
 #define GARBLE_TYPE GARBLE_TYPE_HALFGATES
+
+typedef unsigned long long mytime_t;
+/* typedef uint64_t mytime_t; */
+
+int
+countToN(int *a, int N);
+
+mytime_t
+current_time(void);
+mytime_t
+median(mytime_t *values, int n);
+double
+doubleMean(double A[], int n);
 
 size_t
 filesize(const char *fname);

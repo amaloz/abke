@@ -3,7 +3,8 @@
 #include "net.h"
 #include "util.h"
 
-#include "justGarble.h"
+#include <garble.h>
+
 #include <stdio.h>
 #include <unistd.h>
 #include <openssl/rand.h>
@@ -99,7 +100,7 @@ ca_init(const char *host, const char *port, int m, int ntimes,
     }
 
     (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
-    (void) seedRandom(&seed);
+    (void) garble_seed(&seed);
 
     if (ase_pp_init(&pp, m, param))
         return -1;

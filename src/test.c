@@ -67,12 +67,12 @@ test_ase(void)
 int
 test_AND_circuit(const int *attrs, int n, int nlayers)
 {
-    GarbledCircuit gc;
+    garble_circuit gc;
     block *inputs, *extracted, outputs[2], output;
 
-    inputs = allocate_blocks(2 * n);
-    createInputLabels(inputs, n);
-    extracted = allocate_blocks(n);
+    inputs = garble_allocate_blocks(2 * n);
+    garble_create_input_labels(inputs, n, NULL);
+    extracted = garble_allocate_blocks(n);
     for(int i = 0; i < 2 * n; ++i) {
         RAND_bytes((unsigned char *) &inputs[i], sizeof(block));
     }
@@ -83,13 +83,13 @@ test_AND_circuit(const int *attrs, int n, int nlayers)
     }
     printf("\n");
     build_AND_policy(&gc, n, nlayers);
-    garbleCircuit(&gc, inputs, outputs, GARBLE_TYPE_STANDARD);
-    print_block(stderr, outputs[0]);
+    garble_garble(&gc, inputs, outputs);
+    /* print_block(stderr, outputs[0]); */
     printf(" ");
-    print_block(stderr, outputs[1]);
+    /* print_block(stderr, outputs[1]); */
     printf("\n");
-    evaluate(&gc, extracted, &output, GARBLE_TYPE_STANDARD);
-    print_block(stderr, output);
+    garble_eval(&gc, extracted, &output);
+    /* print_block(stderr, output); */
     printf("\n");
 
     free(inputs);
