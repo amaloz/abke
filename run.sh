@@ -1,4 +1,4 @@
-NTIMES=1
+NTIMES=10
 ONLINE=-o
 
 mkdir -p logs

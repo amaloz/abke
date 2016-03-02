@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 
 struct args {
@@ -81,6 +82,7 @@ go(struct args *args)
     if (args->role == ROLE_CA) {
         ca_init(CA_HOST, CA_PORT, args->m, args->ntimes, args->param, args->type);
     } else {
+        struct timespec t1, t2;
         struct measurement_t measurements;
         abke_time_t *comps = calloc(args->ntimes, sizeof(abke_time_t));
         abke_time_t *comms = calloc(args->ntimes, sizeof(abke_time_t));
@@ -91,6 +93,9 @@ go(struct args *args)
         double meanComp, meanComm;
 
         measurements.type = args->measurement_type;
+
+        t1.tv_sec = 0;
+        t1.tv_nsec = 100000000L;
 
         if (args->ngates < args->m - 1)
             args->ngates = args->m - 1;
@@ -106,7 +111,7 @@ go(struct args *args)
                     client_go(args->host, args->port, args->attrs, args->m,
                               args->ngates, args->param, &measurements,
                               args->type);
-                    sleep(1);
+                    nanosleep(&t1, &t2);
                     break;
                 default:
                     assert(0);
@@ -130,7 +135,6 @@ go(struct args *args)
         {
             garble_circuit gc;
             build_AND_policy(&gc, args->m, args->ngates);
-            fprintf(stderr, "%lu %lu\n", gc.n, gc.q);
             garble_delete(&gc);
         }
         meanComp = doubleMean(compMedians, args->ntimes);
@@ -157,8 +161,7 @@ go(struct args *args)
 static int
 testall(struct args *args)
 {
-    test_AND_circuit(args->attrs, args->m, args->ngates);
-    test_ase();
+    test_AND_circuit(args->attrs, args->m, args->ngates, GARBLE_TYPE);
     return 0;
 }
 
@@ -214,19 +217,18 @@ main(int argc, char *argv[])
         }
     }
 
-    if (args.role == ROLE_NONE) {
-        printf("Error: No role specified\n");
-        return usage();
-    }
-
     args.attrs = calloc(args.m, sizeof(int));
     for (int i = 0; i < args.m; ++i)
         args.attrs[i] = 1 /* rand() % 2 */;
 
-    if (test)
+    if (test) {
         res = testall(&args);
-    else
+    } else if (args.role == ROLE_NONE) {
+        printf("Error: No role specified\n");
+        return usage();
+    } else {
         res = go(&args);
+    }
 
     free(args.attrs);
     return res;

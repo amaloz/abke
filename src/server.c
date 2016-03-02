@@ -217,7 +217,8 @@ server_go(const char *host, const char *port, int m, int q,
         /* Need to call seedRandom for createInputLabels() */
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
         (void) garble_seed(&seed);
-        garble_create_input_labels(input_labels, pp.m, NULL);
+        garble_create_input_labels(input_labels, pp.m, NULL,
+                                   GARBLE_TYPE == GARBLE_TYPE_PRIVACY_FREE);
         (void) RAND_bytes((unsigned char *) &enc_seed, sizeof enc_seed);
     }
     _end = get_time();
@@ -266,7 +267,7 @@ server_go(const char *host, const char *port, int m, int q,
      * same state as now */
     (void) RAND_bytes((unsigned char *) &gc_seed, sizeof gc_seed);
     (void) garble_seed(&gc_seed);
-        _start = get_time();
+    _start = get_time();
     {
         build_AND_policy(&egc.gc, pp.m, q);
         (void) garble_garble(&egc.gc, input_labels, output_labels);

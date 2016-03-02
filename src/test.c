@@ -6,9 +6,8 @@
 #include <openssl/rand.h>
 #include "policies.h"
 
-#include "garble.h"
-#include "circuits.h"
-#include "gates.h"
+#include <circuits.h>
+#include <gates.h>
 
 
 int
@@ -65,17 +64,15 @@ test_ase(void)
 }
 
 int
-test_AND_circuit(const int *attrs, int n, int nlayers)
+test_AND_circuit(const int *attrs, int n, int nlayers, garble_type_e type)
 {
     garble_circuit gc;
     block *inputs, *extracted, outputs[2], output;
 
     inputs = garble_allocate_blocks(2 * n);
-    garble_create_input_labels(inputs, n, NULL);
+    garble_create_input_labels(inputs, n, NULL,
+                               type == GARBLE_TYPE_PRIVACY_FREE);
     extracted = garble_allocate_blocks(n);
-    for(int i = 0; i < 2 * n; ++i) {
-        RAND_bytes((unsigned char *) &inputs[i], sizeof(block));
-    }
     printf("Input:");
     for (int i = 0; i < n; ++i) {
         printf("%d", attrs[i]);
@@ -84,13 +81,9 @@ test_AND_circuit(const int *attrs, int n, int nlayers)
     printf("\n");
     build_AND_policy(&gc, n, nlayers);
     garble_garble(&gc, inputs, outputs);
-    /* print_block(stderr, outputs[0]); */
-    printf(" ");
-    /* print_block(stderr, outputs[1]); */
-    printf("\n");
+    block_printf("%B %B\n", outputs[0], outputs[1]);
     garble_eval(&gc, extracted, &output);
-    /* print_block(stderr, output); */
-    printf("\n");
+    block_printf("%B\n", output);
 
     free(inputs);
     free(extracted);

@@ -13,10 +13,9 @@
 #define element_to_bytes_ element_to_bytes
 #define element_from_bytes_ element_from_bytes
 
-#define GARBLE_TYPE GARBLE_TYPE_HALFGATES
+#define GARBLE_TYPE GARBLE_TYPE_PRIVACY_FREE
 
 typedef unsigned long long mytime_t;
-/* typedef uint64_t mytime_t; */
 
 int
 countToN(int *a, int N);
