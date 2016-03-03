@@ -1,21 +1,62 @@
 import sys
-import matplotlib.pyplot as plt
 import numpy as np
-from pylab import *
+import matplotlib as mpl
+
+# uses code from http://bkanuka.com/articles/native-latex-plots/
+
+def figsize(scale):
+    fig_width_pt = 469.75502
+    inches_per_pt = 1.0 / 72.27
+    golden_mean = (np.sqrt(5.0) - 1.0) / 2.0
+    fig_width = fig_width_pt * inches_per_pt * scale
+    fig_height = fig_width * golden_mean
+    return [fig_width, fig_height]
+
+pgf_with_latex = {
+    'pgf.texsystem': 'pdflatex',
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': [],
+    'font.sans-serif': [],
+    'font.monospace': [],
+    'axes.labelsize': 8,
+    'font.size': 8,
+    'legend.fontsize': 8,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
+    'figure.figsize': figsize(0.9),
+    'figure.autolayout': True,
+    'pgf.preamble': [
+        r"\usepackage[utf8x]{inputenc}",
+        r"\usepackage[T1]{fontenc}",
+        
+        ]
+}
+mpl.rcParams.update(pgf_with_latex)
+
+import matplotlib.pyplot as plt
+
+def newfig(width):
+    plt.clf()
+    fig = plt.figure(figsize=figsize(width))
+    ax = fig.add_subplot(111)
+    return fig, ax
+
+def savefig(fname):
+    # plt.savefig('{}.pgf'.format(fname))
+    plt.savefig('{}.pdf'.format(fname))
 
 def graph(ms, server, client, ssents, csents, fname):
     width = 0.8 / (2 * len(ms))
 
-    # fig = plt.figure(figsize=(6,4.3))
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    fig, ax = newfig(0.8)
     axx = ax.twiny()
     ax.set_xlim((0.0, 3.0))
 
     if ssents is not None and csents is not None:
         axy = ax.twinx()
         axy.set_ylim((0, 90))
-        axy.set_ylabel('data sent (Mbit)')
+        axy.set_ylabel(r'data sent (Mb)')
         axy.set_xlim((0.0, 3.0))
     else:
         axy = None
@@ -36,51 +77,33 @@ def graph(ms, server, client, ssents, csents, fname):
         if axy is not None:
             s1 = axy.scatter(np.array(ind) - width / 2, ssents[m], color=dotcolors[0])
             s2 = axy.scatter(np.array(ind) + width / 2, csents[m], color=dotcolors[1])
-            axy.legend((s1, s2), ('Server data sent', 'Client data sent'), loc='upper right')
+            axy.legend((s1, s2),
+                       (r'Server data sent',
+                        r'Client data sent'),
+                       loc='upper right')
     total = np.array(total)
-    ax.set_xlabel('number of gates')
+    ax.set_xlabel(r'\# gates')
     ax.set_xticks(total + width)
     ax.set_xticklabels(tuple(['$10^3$', '$10^4$', '$10^5$',
                               '$10^3$', '$10^4$', '$10^5$',
                               '$10^3$', '$10^4$', '$10^5$']))
-    ax.set_ylabel('time (s)')
+    ax.set_ylabel(r'time (s)')
     ax.set_yscale('log')
 
     axx.set_xlim(ax.get_xlim())
-    axx.set_xlabel('number of attributes')
+    axx.set_xlabel(r'\# attributes')
     axx.set_xticks(np.array([0.5, 1.5, 2.5]))
-    axx.set_xticklabels(['$10$', '$100$', '$1000$'])
+    axx.set_xticklabels(['10', '100', '1000'])
 
-    ax.legend((r1[0], r2[0]), ('Server time', 'Client time'), loc='upper left')
-    fig.set_size_inches(6, 2.5)
-    fig.savefig(fname, bbox_inches="tight", dpi=100)
-    # show()
+    ax.legend((r1[0], r2[0]), (r'Server time', r'Client time'), loc='upper left')
+    savefig(fname)
 
 def main(argv):
     qs = {}
     scomps, scomms, ccomps, ccomms, ssents, csents = {}, {}, {}, {}, {}, {}
-    # fig_width_pt = 600.0
-    # inches_per_pt = 1.0 / 72.27
-    # golden_mean = 2.0 / (sqrt(5) + 1.0)
-    # fig_width = fig_width_pt * inches_per_pt
-    # fig_height = fig_width * golden_mean
-    # fig_size = [fig_width, fig_height]
-    params = {'backend': 'ps',
-              'axes.labelsize': 8,
-              'font.size': 8,
-              'legend.fontsize': 8,
-              'xtick.labelsize': 8,
-              'ytick.labelsize': 8,
-              'text.usetex': True,
-              # 'figure.figsize': fig_size
-    }
-    plt.rcParams.update(params)
-    plt.rcParams['text.usetex'] = True
-    # plt.rcParams['legend.frameon'] = False
-    plt.rcParams['axes.linewidth'] = 1
 
     if len(argv) != 2:
-        print('Usage: %s filename', argv[0])
+        print('Usage: %s filename' % argv[0])
         exit(1)
     f = open(argv[1], 'r')
     line = f.readline()
@@ -125,8 +148,15 @@ def main(argv):
 
     ms = list(qs.keys())
     ms.sort()
-    graph(ms, scomps, ccomps, None, None, 'computation.png')
-    graph(ms, scomms, ccomms, ssents, csents, 'communication.png')
+    graph(ms, scomps, ccomps, None, None, 'computation')
+    graph(ms, scomms, ccomms, ssents, csents, 'communication')
+
+def ema(y, a):
+    s = []
+    s.append(y[0])
+    for t in range(1, len(y)):
+        s.append(a * y[t] + (1-a) * s[t-1])
+    return np.array(s)
 
 if __name__ == "__main__":
     main(sys.argv)
