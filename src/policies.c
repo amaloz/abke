@@ -1,9 +1,10 @@
 #include "policies.h"
+#include "util.h"
 
 #include <garble.h>
 #include <circuits.h>
-#include <gates.h>
-#include "util.h"
+#include <circuit_builder.h>
+
 
 #include <string.h>
 
@@ -19,14 +20,14 @@ build_AND_policy(garble_circuit *gc, uint64_t n, uint64_t q)
 
     countToN(inputs, n);
     garble_new(gc, n, 1, GARBLE_TYPE);
-    garble_start_building(gc, &ctxt);
-    ANDCircuit(gc, &ctxt, n, inputs, &wire);
+    builder_start_building(gc, &ctxt);
+    circuit_and(gc, &ctxt, n, inputs, &wire);
     for (uint64_t i = n; i <= q; ++i) {
-        int wire2 = garble_next_wire(&ctxt);
-        garble_gate_AND(gc, &ctxt, wire, wire, wire2);
+        int wire2 = builder_next_wire(&ctxt);
+        gate_AND(gc, &ctxt, wire, wire, wire2);
         wire = wire2;
     }
-    garble_finish_building(gc, &ctxt, &wire);
+    builder_finish_building(gc, &ctxt, &wire);
 
     free(inputs);
     free(outputs);

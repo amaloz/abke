@@ -369,7 +369,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        garble_eval(&egc.gc, input_labels, &output_label);
+        garble_eval(&egc.gc, input_labels, &output_label, NULL);
         gc_built = 1;
     }
     _end = get_time();

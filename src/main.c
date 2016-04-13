@@ -1,7 +1,6 @@
 #include "ase.h"
 #include "party.h"
 #include "policies.h"
-#include "test.h"
 #include "util.h"
 
 #include <assert.h>
@@ -50,10 +49,9 @@ static struct option opts[] = {
     {"policy", required_argument, 0, 'P'},
     {"ngates", required_argument, 0, 'q'},
     {"ntimes", required_argument, 0, 't'},
-    {"test", no_argument, 0, 'T'},
     {0, 0, 0, 0}
 };
-static char *short_opts = "acm:op:q:st:T";
+static char *short_opts = "acm:op:q:st:";
 
 static int
 compare(const void * a, const void * b)
@@ -159,13 +157,6 @@ go(struct args *args)
 }
 
 static int
-testall(struct args *args)
-{
-    test_AND_circuit(args->attrs, args->m, args->ngates, GARBLE_TYPE);
-    return 0;
-}
-
-static int
 usage(void)
 {
     /* TODO: write usage */
@@ -175,7 +166,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-    int c, idx, res, test = 0;
+    int c, idx, res;
     struct args args;
 
     args_init(&args);
@@ -209,9 +200,6 @@ main(int argc, char *argv[])
         case 't':
             args.ntimes = atoi(optarg);
             break;
-        case 'T':
-            test = 1;
-            break;
         default:
             break;
         }
@@ -221,9 +209,7 @@ main(int argc, char *argv[])
     for (int i = 0; i < args.m; ++i)
         args.attrs[i] = 1 /* rand() % 2 */;
 
-    if (test) {
-        res = testall(&args);
-    } else if (args.role == ROLE_NONE) {
+    if (args.role == ROLE_NONE) {
         printf("Error: No role specified\n");
         return usage();
     } else {

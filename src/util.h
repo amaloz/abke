@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <pbc/pbc.h>
 #include <pbc/pbc_test.h>
-#include "garble.h"
+#include <garble.h>
 
 #define CA_HOST "127.0.0.1"
 #define CA_PORT "8000"

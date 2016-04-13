@@ -1,5 +1,5 @@
 NTIMES=10
-ONLINE=-o
+ONLINE=
 
 mkdir -p logs
 
