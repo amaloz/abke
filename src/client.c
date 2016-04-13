@@ -35,7 +35,7 @@ _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
 static int
 _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
          struct ase_ctxt_t *ctxt, block *input_labels,
-         label_map_t *map, const int *attrs, abke_time_t *total,
+         block *ttables, const int *attrs, abke_time_t *total,
          enum ase_type_e type)
 {
     abke_time_t _start, _end;
@@ -44,7 +44,6 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
         element_t *inputs;
         AES_KEY key;
         block blk;
-        label_map_t tmp;
 
         inputs = calloc(pp->m, sizeof(element_t));
         for (int i = 0; i < pp->m; ++i) {
@@ -52,22 +51,10 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
         }
         ase_dec(pp, sk, inputs, ctxt, attrs, type);
         for (int i = 0; i < pp->m; ++i) {
-            blk = element_to_block(inputs[i]);
-
+            blk = hash(inputs[i], i, attrs[i]);
             AES_set_decrypt_key(blk, &key);
-            memcpy(&tmp, &map[2 * i], sizeof(label_map_t));
-            AES_ecb_decrypt_blks(tmp.map, 2, &key);
-
-            if (garble_equal(tmp.map[1], garble_zero_block())) {
-                input_labels[i] = tmp.map[0];
-            } else {
-                memcpy(&tmp, &map[2 * i + 1], sizeof(label_map_t));
-                AES_ecb_decrypt_blks(tmp.map, 2, &key);
-                /* If blocks unequal can't check here as that leads to selective
-                 * failure attack */
-                input_labels[i] = tmp.map[0];
-            }
-
+            input_labels[i] = ttables[2 * i + attrs[i]];
+            AES_ecb_decrypt_blks(&input_labels[i], 1, &key);
         }
         for (int i = 0; i < pp->m; ++i) {
             element_clear(inputs[i]);
@@ -188,46 +175,14 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     }
 
     /* Check that label map is correct and retrieve claimed input labels */
-    for (int i = 0; i < pp->m; ++i) {
+    for (int i = 0; i < 2 * pp->m; ++i) {
         block blk;
         AES_KEY key;
-        label_map_t map;
 
-        blk = element_to_block(claimed_inputs[2 * i]);
+        blk = hash(claimed_inputs[i], i / 2, i % 2);
         AES_set_decrypt_key(blk, &key);
-        memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
-        AES_ecb_decrypt_blks(map.map, 2, &key);
-
-        if (garble_equal(map.map[1], garble_zero_block())) {
-            claimed_input_labels[2 * i] = map.map[0];
-
-            blk = element_to_block(claimed_inputs[2 * i + 1]);
-            AES_set_decrypt_key(blk, &key);
-            memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
-            AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (garble_unequal(map.map[1], garble_zero_block())) {
-                printf("CHEAT: input %d doesn't map to valid wire label\n", i);
-                goto cleanup;
-            }
-            claimed_input_labels[2 * i + 1] = map.map[0];
-        } else {
-            memcpy(&map, egc->map[2 * i + 1].map, sizeof(label_map_t));
-            AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (garble_unequal(map.map[1], garble_zero_block())) {
-                printf("CHEAT: input %d doesn't map to valid wire label\n", i);
-                goto cleanup;
-            }
-            claimed_input_labels[2 * i] = map.map[0];
-            blk = element_to_block(claimed_inputs[2 * i + 1]);
-            AES_set_decrypt_key(blk, &key);
-            memcpy(&map, egc->map[2 * i].map, sizeof(label_map_t));
-            AES_ecb_decrypt_blks(map.map, 2, &key);
-            if (garble_unequal(map.map[1], garble_zero_block())) {
-                printf("CHEAT: input %d doesn't map to valid wire label\n", i);
-                goto cleanup;
-            }
-            claimed_input_labels[2 * i + 1] = map.map[0];
-        }
+        AES_ecb_decrypt_blks(&egc->ttables[i], 1, &key);
+        claimed_input_labels[i] = egc->ttables[i];
     }
 
     /* Regarble the circuit to verify that it was constructed correctly */
@@ -309,7 +264,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         ase_sk_init(&pp, &sk, type);
         ase_ctxt_init(&pp, &ctxt, type);
         input_labels = garble_allocate_blocks(pp.m);
-        egc.map = NULL;
+        egc.ttables = NULL;
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
@@ -364,7 +319,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     fprintf(stderr, "Receive garbled circuit: %f\n", _end - _start);
     comm += _end - _start;
 
-    res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.map, attrs, &comp, type);
+    res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.ttables, attrs, &comp, type);
     if (res == -1) goto cleanup;
 
     _start = get_time();
@@ -423,8 +378,8 @@ cleanup:
 
         if (gc_built)
             garble_delete(&egc.gc);
-        if (egc.map)
-            free(egc.map);
+        if (egc.ttables)
+            free(egc.ttables);
 
         if (fd != -1)
             close(fd);

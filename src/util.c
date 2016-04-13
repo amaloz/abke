@@ -65,41 +65,67 @@ filesize(const char *fname)
 	return -1;
 }
 
+/* block */
+/* element_to_block(element_t elem) */
+/* { */
+/*     int length; */
+/*     unsigned char *buf; */
+/*     block out; */
+
+/*     length = element_length_in_bytes_(elem); */
+/*     buf = malloc(length); */
+/*     (void) element_to_bytes_(buf, elem); */
+/*     sha1_hash((char *) &out, sizeof out, buf, length); */
+/*     free(buf); */
+/*     return out; */
+/* } */
+
+block
+hash(element_t elem, int idx, bool bit)
+{
+    SHA256_CTX sha;
+    int length;
+    unsigned char *buf;
+    unsigned char h[SHA256_DIGEST_LENGTH];
+    block out;
+
+    /* element_printf("Hashing %B || %d || %d\n", elem, idx, bit); */
+
+    length = element_length_in_bytes_(elem);
+    buf = malloc(length);
+    (void) element_to_bytes_(buf, elem);
+
+    SHA256_Init(&sha);
+    SHA256_Update(&sha, &idx, sizeof idx);
+    SHA256_Update(&sha, &bit, sizeof bit);
+    SHA256_Update(&sha, buf, length);
+    SHA256_Final(h, &sha);
+    memcpy(&out, h, sizeof out);
+    /* block_printf("Result: %B\n", out); */
+    free(buf);
+    return out;
+}
+
 static void
-sha1_hash(char *out, size_t outlen, const unsigned char *in, size_t inlen)
+sha256_hash(char *out, size_t outlen, const unsigned char *in, size_t inlen)
 {
     unsigned int idx = 0;
     unsigned int length = 0;
-    unsigned char hash[SHA_DIGEST_LENGTH];
+    unsigned char hash[SHA256_DIGEST_LENGTH];
 
     while (length < outlen) {
-        SHA_CTX c;
+        SHA256_CTX c;
         int n;
 
-        (void) SHA1_Init(&c);
-        (void) SHA1_Update(&c, &idx, sizeof idx);
-        (void) SHA1_Update(&c, in, inlen);
-        (void) SHA1_Final(hash, &c);
+        (void) SHA256_Init(&c);
+        (void) SHA256_Update(&c, &idx, sizeof idx);
+        (void) SHA256_Update(&c, in, inlen);
+        (void) SHA256_Final(hash, &c);
         n = MIN(outlen - length, sizeof hash);
         (void) memcpy(out + length, hash, n);
         length += n;
         idx++;
     }
-}
-
-block
-element_to_block(element_t elem)
-{
-    int length;
-    unsigned char *buf;
-    block out;
-
-    length = element_length_in_bytes_(elem);
-    buf = malloc(length);
-    (void) element_to_bytes_(buf, elem);
-    sha1_hash((char *) &out, sizeof out, buf, length);
-    free(buf);
-    return out;
 }
 
 block
@@ -111,7 +137,7 @@ commit(block in, block r)
     input[0] = in;
     input[1] = r;
 
-    sha1_hash((char *) &out, sizeof out, (unsigned char *) &input, sizeof input);
+    sha256_hash((char *) &out, sizeof out, (unsigned char *) &input, sizeof input);
     return out;
 }
 

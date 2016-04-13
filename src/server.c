@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <openssl/rand.h>
 #include <garble/aes.h>
+#include <garble/block.h>
 
 #include "policies.h"
 
@@ -212,7 +213,7 @@ server_go(const char *host, const char *port, int m, int q,
         for (int i = 0; i < 2 * pp.m; ++i) {
             element_init_G1(inputs[i], pp.pairing);
         }
-        egc.map = calloc(2 * pp.m, sizeof(label_map_t));
+        egc.ttables = calloc(2 * pp.m, sizeof(block));
         input_labels = garble_allocate_blocks(2 * pp.m);
         /* Need to call seedRandom for createInputLabels() */
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
@@ -229,34 +230,15 @@ server_go(const char *host, const char *port, int m, int q,
     _start = get_time();
     {
         AES_KEY key;
-        block *map;
         block blk;
-        unsigned char *rand;
 
-        rand = calloc((pp.m + 8) / 8, sizeof(char));
-        RAND_bytes(rand, (pp.m + 8) / 8);
-        for (int i = 0; i < pp.m; ++i) {
-            bool choice = rand[(i / 8)] & (1 << (i % 8)) ? true : false;
-            element_random(inputs[2 * i]);
-            element_random(inputs[2 * i + 1]);
-
-            blk = element_to_block(inputs[2 * i + (choice ? 1 : 0)]);
-            map = egc.map[2 * i].map;
-            map[0] = input_labels[2 * i + (choice ? 1 : 0)];
-            map[1] = garble_zero_block();
-
+        for (int i = 0; i < 2 * pp.m; ++i) {
+            element_random(inputs[i]);
+            blk = hash(inputs[i], i / 2, i % 2);
             AES_set_encrypt_key(blk, &key);
-            AES_ecb_encrypt_blks(map, 2, &key);
-
-            blk = element_to_block(inputs[2 * i + (choice ? 0 : 1)]);
-            map = egc.map[2 * i + 1].map;
-            map[0] = input_labels[2 * i + (choice ? 0 : 1)];
-            map[1] = garble_zero_block();
-
-            AES_set_encrypt_key(blk, &key);
-            AES_ecb_encrypt_blks(map, 2, &key);
+            egc.ttables[i] = input_labels[i];
+            AES_ecb_encrypt_blks(&egc.ttables[i], 1, &key);
         }
-        free(rand);
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs and label map: %f\n", _end - _start);
@@ -416,7 +398,7 @@ cleanup:
 
         if (gc_built)
             garble_delete(&egc.gc);
-        free(egc.map);
+        free(egc.ttables);
 
         if (fd != -1)
             close(fd);

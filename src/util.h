@@ -34,6 +34,9 @@ block
 element_to_block(element_t elem);
 
 block
+hash(element_t elem, int idx, bool bit);
+
+block
 commit(block in, block r);
 
 typedef double abke_time_t;
