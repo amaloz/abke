@@ -1,2 +1,5 @@
 *.o
 a.out
+*.pdf
+logs
+*.txt

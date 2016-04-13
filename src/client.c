@@ -35,36 +35,27 @@ _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
 static int
 _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
          struct ase_ctxt_t *ctxt, block *input_labels,
-         block *ttables, const int *attrs, abke_time_t *total,
-         enum ase_type_e type)
+         block *ttables, const int *attrs, enum ase_type_e type)
 {
-    abke_time_t _start, _end;
-    _start = get_time();
-    {
-        element_t *inputs;
-        AES_KEY key;
-        block blk;
+    element_t *inputs;
+    AES_KEY key;
+    block blk;
 
-        inputs = calloc(pp->m, sizeof(element_t));
-        for (int i = 0; i < pp->m; ++i) {
-            element_init_G1(inputs[i], pp->pairing);
-        }
-        ase_dec(pp, sk, inputs, ctxt, attrs, type);
-        for (int i = 0; i < pp->m; ++i) {
-            blk = hash(inputs[i], i, attrs[i]);
-            AES_set_decrypt_key(blk, &key);
-            input_labels[i] = ttables[2 * i + attrs[i]];
-            AES_ecb_decrypt_blks(&input_labels[i], 1, &key);
-        }
-        for (int i = 0; i < pp->m; ++i) {
-            element_clear(inputs[i]);
-        }
-        free(inputs);
+    inputs = calloc(pp->m, sizeof(element_t));
+    for (int i = 0; i < pp->m; ++i) {
+        element_init_G1(inputs[i], pp->pairing);
     }
-    _end = get_time();
-    fprintf(stderr, "Decrypt: %f\n", _end - _start);
-    if (total)
-        *total += _end - _start;
+    ase_dec(pp, sk, inputs, ctxt, attrs, type);
+    for (int i = 0; i < pp->m; ++i) {
+        blk = hash(inputs[i], i, attrs[i]);
+        AES_set_decrypt_key(blk, &key);
+        input_labels[i] = ttables[2 * i + attrs[i]];
+        AES_ecb_decrypt_blks(&input_labels[i], 1, &key);
+    }
+    for (int i = 0; i < pp->m; ++i) {
+        element_clear(inputs[i]);
+    }
+    free(inputs);
     return 0;
 }
 
@@ -85,7 +76,7 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
     _end = get_time();
     fprintf(stderr, "Compute commitment: %f\n", _end - _start);
     if (comp)
-        *comp += _end - _start;
+        *comp = _end - _start;
 
     _start = get_time();
     {
@@ -94,7 +85,7 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
     _end = get_time();
     fprintf(stderr, "Send commitment: %f\n", _end - _start);
     if (comm)
-        *comm += _end - _start;
+        *comm = _end - _start;
     return 0;
 }
 
@@ -215,9 +206,9 @@ cleanup:
 
     fprintf(stderr, "Check: %f\n", _comm + _comp);
     if (comm)
-        *comm += _comm;
+        *comm = _comm;
     if (comp)
-        *comp += _comp;
+        *comp = _comp;
     return res;
 }
 
@@ -237,19 +228,11 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     block key = garble_zero_block();
     ExtGarbledCircuit egc;
     int gc_built = 0;
-    abke_time_t _start, _end, comm = 0.0, comp = 0.0;
+    abke_time_t _start, _end, comm = 0.0, comp = 0.0, ocomp = 0.0;
+    abke_time_t tmp_comp, tmp_comm;
     int res = -1;
 
     fprintf(stderr, "Starting client with m = %d and pairing %s\n", m, param);
-    fprintf(stderr, "Measurement type: ");
-    switch (measurements->type) {
-    case MEASUREMENT_TYPE_FULL:
-        fprintf(stderr, "Full\n");
-        break;
-    case MEASUREMENT_TYPE_ONLINE:
-        fprintf(stderr, "Online\n");
-        break;
-    }
     fprintf(stderr, "Attribute vector: ");
     for (int i = 0; i < m; ++i) {
         fprintf(stderr, "%d", attrs[i]);
@@ -268,8 +251,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
-    if (measurements->type == MEASUREMENT_TYPE_FULL)
-        comp += _end - _start;
+    comp += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk, &pk, &sk, attrs, type);
     if (res == -1) goto cleanup;
@@ -283,8 +265,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);
-    if (measurements->type == MEASUREMENT_TYPE_FULL)
-        comp += _end - _start;
+    comp += _end - _start;
 
     /* Connect to server */
     if ((fd = net_init_client(host, port)) == -1) {
@@ -319,8 +300,15 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     fprintf(stderr, "Receive garbled circuit: %f\n", _end - _start);
     comm += _end - _start;
 
-    res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.ttables, attrs, &comp, type);
-    if (res == -1) goto cleanup;
+    _start = get_time();
+    {
+        res = _decrypt(&pp, &sk, &ctxt, input_labels, egc.ttables, attrs, type);
+        if (res == -1) goto cleanup;
+    }
+    _end = get_time();
+    fprintf(stderr, "Decrypt: %f\n", _end - _start);
+    comp += _end - _start;
+    ocomp += _end - _start;
 
     _start = get_time();
     {
@@ -330,11 +318,19 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     _end = get_time();
     fprintf(stderr, "Evaluate garbled circuit: %f\n", _end - _start);
     comp += _end - _start;
+    ocomp += _end - _start;
 
-    res = _commit(output_label, &decom, fd, &comm, &comp);
+    res = _commit(output_label, &decom, fd, &tmp_comm, &tmp_comp);
     if (res == -1) goto cleanup;
-    res = _check(&pp, &pk, &egc, &ctxt, attrs, q, fd, &comm, &comp, type);
+    comm += tmp_comm;
+    comp += tmp_comp;
+    ocomp += tmp_comp;
+
+    res = _check(&pp, &pk, &egc, &ctxt, attrs, q, fd, &tmp_comm, &tmp_comp, type);
     if (res == -1) goto cleanup;
+    comm += tmp_comm;
+    comp += tmp_comp;
+    ocomp += tmp_comp;
 
     _start = get_time();
     {
@@ -387,16 +383,21 @@ cleanup:
     _end = get_time();
     fprintf(stderr, "Cleanup: %f\n", _end - _start);
     comp += _end - _start;
+    ocomp += _end - _start;
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "Computation:   %f\n", comp);
-    fprintf(stderr, "Communication: %f\n", comm);
+    fprintf(stderr, "Computation:          %f\n", comp);
+    fprintf(stderr, "Computation (online): %f\n", ocomp);
+    fprintf(stderr, "Communication:        %f\n", comm);
     fprintf(stderr, "  Bytes sent:     %d\n", g_bytes_sent);
     fprintf(stderr, "  Bytes received: %d\n", g_bytes_rcvd);
 
-    fprintf(stderr, "Total time:    %f\n", comm + comp);
+
+    fprintf(stderr, "Total time:          %f\n", comm + comp);
+    fprintf(stderr, "Total time (online): %f\n", comm + ocomp);
 
     measurements->comp = comp;
+    measurements->ocomp = ocomp;
     measurements->comm = comm;
     measurements->bytes_sent = g_bytes_sent;
     measurements->bytes_rcvd = g_bytes_rcvd;

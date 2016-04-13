@@ -12,7 +12,6 @@
 struct args {
     enum role_e role;
     enum ase_type_e type;
-    enum measurement_type_e measurement_type;
     int m;
     int ngates;
     int ntimes;
@@ -28,7 +27,6 @@ args_init(struct args *args)
 {
     args->type = ASE_HOMOSIG;
     args->role = ROLE_NONE;
-    args->measurement_type = MEASUREMENT_TYPE_FULL;
     args->m = 2;
     args->ngates = args->m - 1;
     args->ntimes = 1;
@@ -44,14 +42,13 @@ static struct option opts[] = {
     {"server", no_argument, 0, 's'},
     {"client", no_argument, 0, 'c'},
     {"nattrs", required_argument, 0, 'm'},
-    {"measure-online", no_argument, 0, 'o'},
     {"param", required_argument, 0, 'p'},
     {"policy", required_argument, 0, 'P'},
     {"ngates", required_argument, 0, 'q'},
     {"ntimes", required_argument, 0, 't'},
     {0, 0, 0, 0}
 };
-static char *short_opts = "acm:op:q:st:";
+static char *short_opts = "acm:p:q:st:";
 
 static int
 compare(const void * a, const void * b)
@@ -83,14 +80,14 @@ go(struct args *args)
         struct timespec t1, t2;
         struct measurement_t measurements;
         abke_time_t *comps = calloc(args->ntimes, sizeof(abke_time_t));
+        abke_time_t *ocomps = calloc(args->ntimes, sizeof(abke_time_t));
         abke_time_t *comms = calloc(args->ntimes, sizeof(abke_time_t));
         size_t bytes_sent = 0;
         size_t bytes_rcvd = 0;
         double *compMedians = calloc(args->ntimes, sizeof(double));
+        double *ocompMedians = calloc(args->ntimes, sizeof(double));
         double *commMedians = calloc(args->ntimes, sizeof(double));
-        double meanComp, meanComm;
-
-        measurements.type = args->measurement_type;
+        double meanComp, meanOComp, meanComm;
 
         t1.tv_sec = 0;
         t1.tv_nsec = 100000000L;
@@ -124,9 +121,11 @@ go(struct args *args)
                 else
                     assert(bytes_rcvd == measurements.bytes_rcvd);
                 comps[j] = measurements.comp;
+                ocomps[j] = measurements.ocomp;
                 comms[j] = measurements.comm;
             }
             compMedians[i] = (double) mymedian(comps, args->ntimes);
+            ocompMedians[i] = (double) mymedian(ocomps, args->ntimes);
             commMedians[i] = (double) mymedian(comms, args->ntimes);
         }
         fprintf(stderr, "\n");
@@ -136,13 +135,16 @@ go(struct args *args)
             garble_delete(&gc);
         }
         meanComp = doubleMean(compMedians, args->ntimes);
+        meanOComp = doubleMean(ocompMedians, args->ntimes);
         meanComm = doubleMean(commMedians, args->ntimes);
         switch (args->role) {
         case ROLE_SERVER:
-            printf("Server: %lf %lf %zu\n", meanComp, meanComm, bytes_sent);
+            printf("Server: %lf %lf %lf %zu\n", meanComp, meanOComp, meanComm,
+                   bytes_sent);
             break;
         case ROLE_CLIENT:
-            printf("Client: %lf %lf %zu\n", meanComp, meanComm, bytes_sent);
+            printf("Client: %lf %lf %lf %zu\n", meanComp, meanOComp, meanComm,
+                   bytes_sent);
             break;
         default:
             assert(0);
@@ -181,9 +183,6 @@ main(int argc, char *argv[])
             break;
         case 'm':
             args.m = atoi(optarg);
-            break;
-        case 'o':
-            args.measurement_type = MEASUREMENT_TYPE_ONLINE;
             break;
         case 'p':
             args.param = optarg;

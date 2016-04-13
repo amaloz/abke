@@ -100,7 +100,7 @@ def graph(ms, server, client, ssents, csents, fname):
 
 def main(argv):
     qs = {}
-    scomps, scomms, ccomps, ccomms, ssents, csents = {}, {}, {}, {}, {}, {}
+    scomps, socomps, scomms, ccomps, cocomps, ccomms, ssents, csents = {}, {}, {}, {}, {}, {}, {}, {}
 
     if len(argv) != 2:
         print('Usage: %s filename' % argv[0])
@@ -111,10 +111,10 @@ def main(argv):
     while line != '':
         m, q = line.split()
         m, q = int(m), int(q)
-        _, scomp, scomm, ssent = f.readline().split()
-        scomp, scomm, ssent = float(scomp), float(scomm), int(ssent) * 8 / 1000 / 1000
-        _, ccomp, ccomm, csent = f.readline().split()
-        ccomp, ccomm, csent = float(ccomp), float(ccomm), int(csent) * 8 / 1000 / 1000
+        _, scomp, socomp, scomm, ssent = f.readline().split()
+        scomp, socomp, scomm, ssent = float(scomp), float(socomp), float(scomm), int(ssent) * 8 / 1000 / 1000
+        _, ccomp, cocomp, ccomm, csent = f.readline().split()
+        ccomp, cocomp, ccomm, csent = float(ccomp), float(cocomp), float(ccomm), int(csent) * 8 / 1000 / 1000
         try:
             qs[m].append(q)
         except KeyError:
@@ -124,6 +124,10 @@ def main(argv):
         except KeyError:
             scomps[m] = [scomp]
         try:
+            socomps[m].append(socomp)
+        except KeyError:
+            socomps[m] = [socomp]
+        try:
             scomms[m].append(scomm)
         except KeyError:
             scomms[m] = [scomm]
@@ -131,6 +135,10 @@ def main(argv):
             ccomps[m].append(ccomp)
         except KeyError:
             ccomps[m] = [ccomp]
+        try:
+            cocomps[m].append(cocomp)
+        except KeyError:
+            cocomps[m] = [cocomp]
         try:
             ccomms[m].append(ccomm)
         except KeyError:
@@ -149,6 +157,7 @@ def main(argv):
     ms = list(qs.keys())
     ms.sort()
     graph(ms, scomps, ccomps, None, None, 'computation')
+    graph(ms, socomps, cocomps, None, None, 'computation-online')
     graph(ms, scomms, ccomms, ssents, csents, 'communication')
 
 def ema(y, a):

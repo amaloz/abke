@@ -4,11 +4,9 @@
 #include "ase.h"
 #include "util.h"
 
-enum measurement_type_e { MEASUREMENT_TYPE_FULL, MEASUREMENT_TYPE_ONLINE };
-
 struct measurement_t {
-    enum measurement_type_e type;
     abke_time_t comp;
+    abke_time_t ocomp;
     abke_time_t comm;
     size_t bytes_sent;
     size_t bytes_rcvd;

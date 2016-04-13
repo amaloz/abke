@@ -72,7 +72,7 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
     _end = get_time();
     fprintf(stderr, "Receive public key: %f\n", _end - _start);
     if (comm)
-        *comm += _end - _start;
+        *comm = _end - _start;
 
     _start = get_time();
     {
@@ -92,35 +92,27 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
     _end = get_time();
     fprintf(stderr, "Verify public key: %f\n", _end - _start);
     if (comp)
-        *comp += _end - _start;
+        *comp = _end - _start;
     return 0;
 }
 
 static int
 _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
          struct ase_ctxt_t *ctxt, element_t *inputs,
-         unsigned int *seed, abke_time_t *total, enum ase_type_e type)
+         unsigned int *seed, enum ase_type_e type)
 {
-    abke_time_t _start, _end;
-    _start = get_time();
-    {
-        if (RAND_bytes((unsigned char *) seed, sizeof(unsigned int)) == 0) {
-            fprintf(stderr, "RAND_bytes failed\n");
-            return -1;
-        }
-        ase_enc(pp, pk, ctxt, inputs, seed, type);
-#ifdef THPOOL
-        thpool_wait(g_thpool);
-        if (g_thpool_args.result != 1) {
-            fprintf(stderr, "CHEAT: public key failed to verify\n");
-            return -1;
-        }
-#endif
+    if (RAND_bytes((unsigned char *) seed, sizeof(unsigned int)) == 0) {
+        fprintf(stderr, "RAND_bytes failed\n");
+        return -1;
     }
-    _end = get_time();
-    fprintf(stderr, "Encrypt: %f\n", _end - _start);
-    if (total)
-        *total += _end - _start;
+    ase_enc(pp, pk, ctxt, inputs, seed, type);
+#ifdef THPOOL
+    thpool_wait(g_thpool);
+    if (g_thpool_args.result != 1) {
+        fprintf(stderr, "CHEAT: public key failed to verify\n");
+        return -1;
+    }
+#endif
     return 0;
 }
 
@@ -180,19 +172,11 @@ server_go(const char *host, const char *port, int m, int q,
     block *input_labels, output_labels[2];
     block key = garble_zero_block();
     unsigned int enc_seed;
-    abke_time_t _start, _end, comm = 0.0, comp = 0.0;
+    abke_time_t _start, _end, comm = 0.0, comp = 0.0, ocomp = 0.0;
+    abke_time_t tmp_comp, tmp_comm;
     int res = -1;
 
     fprintf(stderr, "Starting server with m = %d and pairing %s\n", m, param);
-    fprintf(stderr, "Measurement type: ");
-    switch (measurements->type) {
-    case MEASUREMENT_TYPE_FULL:
-        fprintf(stderr, "Full\n");
-        break;
-    case MEASUREMENT_TYPE_ONLINE:
-        fprintf(stderr, "Online\n");
-        break;
-    }
 
 #ifdef THPOOL
     fprintf(stderr, "Using thread pool\n");
@@ -215,7 +199,7 @@ server_go(const char *host, const char *port, int m, int q,
         }
         egc.ttables = calloc(2 * pp.m, sizeof(block));
         input_labels = garble_allocate_blocks(2 * pp.m);
-        /* Need to call seedRandom for createInputLabels() */
+        /* Need to call garble_seed() for garble_create_input_labels() */
         (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
         (void) garble_seed(&seed);
         garble_create_input_labels(input_labels, pp.m, NULL,
@@ -224,26 +208,23 @@ server_go(const char *host, const char *port, int m, int q,
     }
     _end = get_time();
     fprintf(stderr, "Initialize: %f\n", _end - _start);
-    if (measurements->type == MEASUREMENT_TYPE_FULL)
-        comp += _end - _start;
+    comp += _end - _start;
 
     _start = get_time();
-    {
+    for (int i = 0; i < 2 * pp.m; ++i) {
         AES_KEY key;
         block blk;
 
-        for (int i = 0; i < 2 * pp.m; ++i) {
-            element_random(inputs[i]);
-            blk = hash(inputs[i], i / 2, i % 2);
-            AES_set_encrypt_key(blk, &key);
-            egc.ttables[i] = input_labels[i];
-            AES_ecb_encrypt_blks(&egc.ttables[i], 1, &key);
-        }
+        element_random(inputs[i]);
+        blk = hash(inputs[i], i / 2, i % 2);
+        AES_set_encrypt_key(blk, &key);
+        egc.ttables[i] = input_labels[i];
+        AES_ecb_encrypt_blks(&egc.ttables[i], 1, &key);
     }
     _end = get_time();
-    fprintf(stderr, "Generate random inputs and label map: %f\n", _end - _start);
-    if (measurements->type == MEASUREMENT_TYPE_FULL)
-        comp += _end - _start;
+    fprintf(stderr, "Generate random inputs and translation table: %f\n",
+            _end - _start);
+    comp += _end - _start;
 
     /* Need to re-seed before garbling so that when re-garbling we'll be in the
      * same state as now */
@@ -251,14 +232,14 @@ server_go(const char *host, const char *port, int m, int q,
     (void) garble_seed(&gc_seed);
     _start = get_time();
     {
+        /* XXX: right now we're hardcoding the policy here */
         build_AND_policy(&egc.gc, pp.m, q);
         (void) garble_garble(&egc.gc, input_labels, output_labels);
         gc_built = 1;
     }
     _end = get_time();
     fprintf(stderr, "Garble circuit: %f\n", _end - _start);
-    if (measurements->type == MEASUREMENT_TYPE_FULL)
-        comp += _end - _start;
+    comp += _end - _start;
 
     res = _connect_to_ca(&pp, &mpk, type);
     if (res == -1) goto cleanup;
@@ -276,16 +257,22 @@ server_go(const char *host, const char *port, int m, int q,
         exit(EXIT_FAILURE);
     }
 
-    /* if measuring online time, it should be zero at this point */
-    if (measurements->type == MEASUREMENT_TYPE_ONLINE)
-        assert(comp == 0.0);
-    res = _get_pk(&pp, &mpk, &client_pk, fd, &comm, &comp, type);
-    if (measurements->type == MEASUREMENT_TYPE_ONLINE)
-        /* divide by four to mimic 5-user batching of pk verification */
-        comp /= 4;
+    res = _get_pk(&pp, &mpk, &client_pk, fd, &tmp_comm, &tmp_comp, type);
     if (res == -1) goto cleanup;
-    res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, &comp, type);
-    if (res == -1) goto cleanup;
+    comm += tmp_comm;
+    comp += tmp_comp;
+    /* divide by four to mimic 5-user batching of pk verification */
+    ocomp = tmp_comp / 4;
+
+    _start = get_time();
+    {
+        res = _encrypt(&pp, &client_pk, &ctxt, inputs, &enc_seed, type);
+        if (res == -1) goto cleanup;
+    }
+    _end = get_time();
+    fprintf(stderr, "Encrypt: %f\n", _end - _start);
+    comp += _end - _start;
+    ocomp += _end - _start;
 
     _start = get_time();
     {
@@ -314,9 +301,7 @@ server_go(const char *host, const char *port, int m, int q,
     fprintf(stderr, "Receive commitment: %f\n", _end - _start);
     comm += _end - _start;
 
-    /* Send randomness and inputs to client */
-    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd,
-                                      &comm);
+    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &comm);
     if (res == -1) goto cleanup;
 
     {
@@ -346,6 +331,7 @@ server_go(const char *host, const char *port, int m, int q,
         _end = get_time();
         fprintf(stderr, "Check commitment and output label: %f\n", _end - _start);
         comp += _end - _start;
+        ocomp += _end - _start;
     }
 
     /* Do coin tossing */
@@ -363,6 +349,7 @@ server_go(const char *host, const char *port, int m, int q,
         _end = get_time();
         fprintf(stderr, "Compute commitment for coin tossing: %f\n", _end - _start);
         comp += _end - _start;
+        ocomp += _end - _start;
 
         _start = get_time();
         {
@@ -378,7 +365,6 @@ server_go(const char *host, const char *port, int m, int q,
     }
 
     res = 0;
-
 cleanup:
     _start = get_time();
     {
@@ -408,16 +394,20 @@ cleanup:
     _end = get_time();
     fprintf(stderr, "Cleanup: %f\n", _end - _start);
     comp += _end - _start;
+    ocomp += _end - _start;
 
     fprintf(stderr, "\n");
-    fprintf(stderr, "Computation:   %f\n", comp);
-    fprintf(stderr, "Communication: %f\n", comm);
+    fprintf(stderr, "Computation:          %f\n", comp);
+    fprintf(stderr, "Computation (online): %f\n", ocomp);
+    fprintf(stderr, "Communication:        %f\n", comm);
     fprintf(stderr, "  Bytes sent:     %d\n", g_bytes_sent);
     fprintf(stderr, "  Bytes received: %d\n", g_bytes_rcvd);
 
-    fprintf(stderr, "Total time:    %f\n", comm + comp);
+    fprintf(stderr, "Total time:          %f\n", comm + comp);
+    fprintf(stderr, "Total time (online): %f\n", comm + ocomp);
 
     measurements->comp = comp;
+    measurements->ocomp = ocomp;
     measurements->comm = comm;
     measurements->bytes_sent = g_bytes_sent;
     measurements->bytes_rcvd = g_bytes_rcvd;
