@@ -2,7 +2,7 @@ NTIMES=2
 
 mkdir -p logs
 
-for M in 10 100 1000
+for M in 10 50 200
 do
 
     for NLAYERS in 1000 10000 100000

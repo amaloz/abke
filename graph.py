@@ -12,6 +12,8 @@ def figsize(scale):
     fig_height = fig_width * golden_mean
     return [fig_width, fig_height]
 
+fontsize = 14
+
 pgf_with_latex = {
     'pgf.texsystem': 'pdflatex',
     'text.usetex': True,
@@ -19,11 +21,11 @@ pgf_with_latex = {
     'font.serif': [],
     'font.sans-serif': [],
     'font.monospace': [],
-    'axes.labelsize': 10,
-    'font.size': 10,
-    'legend.fontsize': 8,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
+    'axes.labelsize': fontsize,
+    'font.size': fontsize,
+    'legend.fontsize': fontsize - 2,
+    'xtick.labelsize': fontsize,
+    'ytick.labelsize': fontsize,
     'figure.figsize': figsize(0.9),
     'figure.autolayout': True,
     'pgf.preamble': [
@@ -55,7 +57,7 @@ def graph(ms, server, client, ssents, csents, fname):
 
     if ssents is not None and csents is not None:
         axy = ax.twinx()
-        axy.set_ylim((0, 90))
+        axy.set_ylim((0, 60))
         axy.set_ylabel(r'data sent (Mb)')
         axy.set_xlim((0.0, 3.0))
     else:
@@ -88,12 +90,15 @@ def graph(ms, server, client, ssents, csents, fname):
                               '$10^3$', '$10^4$', '$10^5$',
                               '$10^3$', '$10^4$', '$10^5$']))
     ax.set_ylabel(r'time (s)')
-    ax.set_yscale('log')
+    # ax.set_yscale('log')
 
+
+    if axy is not None:
+        axx.set_ylim((0.0,6.0))
     axx.set_xlim(ax.get_xlim())
     axx.set_xlabel(r'\# attributes')
     axx.set_xticks(np.array([0.5, 1.5, 2.5]))
-    axx.set_xticklabels(['10', '100', '1000'])
+    axx.set_xticklabels(['10', '50', '200'])
 
     ax.legend((r1[0], r2[0]), (r'Server time', r'Client time'), loc='upper left')
     savefig(fname)
