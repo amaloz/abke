@@ -182,11 +182,11 @@ ase_ctxt_clear(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
 
 int
 ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master,
-             int fd, enum ase_type_e type)
+             FILE *f, enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_mpk_send(pp, &master->homosig, fd);
+        return ase_homosig_mpk_send(pp, &master->homosig, f);
         break;
     default:
         assert(0);
@@ -195,12 +195,12 @@ ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master,
 }
 
 int 
-ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, int fd,
+ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, FILE *f,
              enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_mpk_recv(pp, &master->homosig, fd);
+        return ase_homosig_mpk_recv(pp, &master->homosig, f);
         break;
     default:
         assert(0);
@@ -209,12 +209,12 @@ ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, int fd,
 }
 
 int
-ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
+ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, FILE *f,
             enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_pk_send(pp, &pk->homosig, fd);
+        return ase_homosig_pk_send(pp, &pk->homosig, f);
         break;
     default:
         assert(0);
@@ -223,12 +223,12 @@ ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
 }
 
 int
-ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
+ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, FILE *f,
             enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_pk_recv(pp, &pk->homosig, fd);
+        return ase_homosig_pk_recv(pp, &pk->homosig, f);
         break;
     default:
         assert(0);
@@ -237,12 +237,12 @@ ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
 }
 
 int
-ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
+ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, FILE *f,
             enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_sk_send(pp, &sk->homosig, fd);
+        return ase_homosig_sk_send(pp, &sk->homosig, f);
         break;
     default:
         assert(0);
@@ -251,12 +251,12 @@ ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
 }
 
 int
-ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
+ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, FILE *f,
             enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_sk_recv(pp, &sk->homosig, fd);
+        return ase_homosig_sk_recv(pp, &sk->homosig, f);
         break;
     default:
         assert(0);
@@ -265,12 +265,12 @@ ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
 }
 
 int
-ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd,
+ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, FILE *f,
               enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_ctxt_send(pp, &ctxt->homosig, fd);
+        return ase_homosig_ctxt_send(pp, &ctxt->homosig, f);
         break;
     default:
         assert(0);
@@ -279,12 +279,12 @@ ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd,
 }
 
 int
-ase_ctxt_recv(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd,
+ase_ctxt_recv(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, FILE *f,
               enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_ctxt_recv(pp, &ctxt->homosig, fd);
+        return ase_homosig_ctxt_recv(pp, &ctxt->homosig, f);
         break;
     default:
         assert(0);

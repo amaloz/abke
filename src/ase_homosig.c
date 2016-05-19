@@ -129,7 +129,7 @@ ase_homosig_ctxt_clear(struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt)
 
 int
 ase_homosig_mpk_send(const struct ase_pp_t *pp,
-                     struct ase_homosig_master_t *master, int fd)
+                     struct ase_homosig_master_t *master, FILE *f)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -166,10 +166,9 @@ ase_homosig_mpk_send(const struct ase_pp_t *pp,
         p += element_to_bytes_(buf + p, master->jsigs[i].h);
         p += element_to_bytes_(buf + p, master->jsigs[i].pubkey);
     }
-    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
-        goto cleanup;
-    res = net_send(fd, buf, length, 0);
-cleanup:
+    net_send(f, &length, sizeof length);
+    net_send(f, buf, length);
+
     free(buf);
     return res;
 
@@ -177,18 +176,16 @@ cleanup:
 
 int 
 ase_homosig_mpk_recv(struct ase_pp_t *pp, struct ase_homosig_master_t *master,
-                     int fd)
+                     FILE *f)
 {
     size_t length, p = 0;
     unsigned char *buf;
     int res = 0;
 
-    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
-        return -1;
+    net_recv(f, &length, sizeof length);
     if ((buf = malloc(length)) == NULL)
         return -1;
-    if ((res = net_recv(fd, buf, length, 0)) == -1)
-        goto cleanup;
+    net_recv(f, buf, length);
     p += element_from_bytes_(master->gsig.g, buf + p);
     p += element_from_bytes_(master->gsig.h, buf + p);
     p += element_from_bytes_(master->gsig.pubkey, buf + p);
@@ -203,14 +200,14 @@ ase_homosig_mpk_recv(struct ase_pp_t *pp, struct ase_homosig_master_t *master,
         p += element_from_bytes_(master->jsigs[i].h, buf + p);
         p += element_from_bytes_(master->jsigs[i].pubkey, buf + p);
     }
-cleanup:
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_pk_send(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                    int fd)
+                    FILE *f)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -240,28 +237,25 @@ ase_homosig_pk_send(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
     for (int i = 0; i < pp->m; ++i) {
         p += element_to_bytes_(buf + p, pk->esigs[i]);
     }
-    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
-        goto cleanup;
-    res = net_send(fd, buf, length, 0);
-cleanup:
+    net_send(f, &length, sizeof length);
+    net_send(f, buf, length);
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_pk_recv(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                    int fd)
+                    FILE *f)
 {
     size_t length, p = 0;
     unsigned char *buf;
     int res = 0;
 
-    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
-        return -1;
+    net_recv(f, &length, sizeof length);
     if ((buf = malloc(length)) == NULL)
         return -1;
-    if ((res = net_recv(fd, buf, length, 0)) == -1)
-        goto cleanup;
+    net_recv(f, buf, length);
     p += element_from_bytes_(pk->g, buf + p);
     p += element_from_bytes_(pk->h, buf + p);
     p += element_from_bytes_(pk->u, buf + p);
@@ -274,14 +268,14 @@ ase_homosig_pk_recv(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
     for (int i = 0; i < pp->m; ++i) {
         p += element_from_bytes_(pk->esigs[i], buf + p);
     }
-cleanup:
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_sk_send(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
-                    int fd)
+                    FILE *f)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -295,40 +289,37 @@ ase_homosig_sk_send(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
     for (int i = 0; i < pp->m; ++i) {
         p += element_to_bytes_(buf + p, sk->rs[i]);
     }
-    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
-        goto cleanup;
-    res = net_send(fd, buf, length, 0);
-cleanup:
+    net_send(f, &length, sizeof length);
+    net_send(f, buf, length);
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_sk_recv(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
-                    int fd)
+                    FILE *f)
 {
     size_t length, p = 0;
     unsigned char *buf;
     int res = 0;
 
-    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
-        return -1;
+    net_recv(f, &length, sizeof length);
     if ((buf = malloc(length)) == NULL)
         return -1;
-    if ((res = net_recv(fd, buf, length, 0)) == -1)
-        goto cleanup;
+    net_recv(f, buf, length);
 
     for (int i = 0; i < pp->m; ++i) {
         p += element_from_bytes_(sk->rs[i], buf + p);
     }
-cleanup:
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_ctxt_send(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt,
-                      int fd)
+                      FILE *f)
 {
     size_t length = 0, p = 0;
     unsigned char *buf;
@@ -346,35 +337,32 @@ ase_homosig_ctxt_send(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt
     for (int i = 0; i < 2 * pp->m; ++i) {
         p += element_to_bytes_(buf + p, ctxt->c2s[i]);
     }
-    if ((res = net_send(fd, &length, sizeof length, 0)) == -1)
-        goto cleanup;
-    res = net_send(fd, buf, length, 0);
-cleanup:
+    net_send(f, &length, sizeof length);
+    net_send(f, buf, length);
+
     free(buf);
     return res;
 }
 
 int
 ase_homosig_ctxt_recv(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt,
-                      int fd)
+                      FILE *f)
 {
     size_t length, p = 0;
     unsigned char *buf;
     int res = 0;
 
-    if ((res = net_recv(fd, &length, sizeof length, 0)) == -1)
-        return -1;
+    net_recv(f, &length, sizeof length);
     if ((buf = malloc(length)) == NULL)
         return -1;
-    if ((res = net_recv(fd, buf, length, 0)) == -1)
-        goto cleanup;
+    net_recv(f, buf, length);
 
     p += element_from_bytes_(ctxt->g, buf + p);
     p += element_from_bytes_(ctxt->h, buf + p);
     for (int i = 0; i < 2 * pp->m; ++i) {
         p += element_from_bytes_(ctxt->c2s[i], buf + p);
     }
-cleanup:
+
     free(buf);
     return res;
 }

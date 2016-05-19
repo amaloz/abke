@@ -27,28 +27,28 @@ void
 ase_homosig_ctxt_clear(struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt);
 int
 ase_homosig_mpk_send(const struct ase_pp_t *pp,
-                     struct ase_homosig_master_t *master, int fd);
+                     struct ase_homosig_master_t *master, FILE *f);
 int 
 ase_homosig_mpk_recv(struct ase_pp_t *pp, struct ase_homosig_master_t *master,
-                     int fd);
+                     FILE *f);
 int
 ase_homosig_pk_send(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                    int fd);
+                    FILE *f);
 int
 ase_homosig_pk_recv(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                    int fd);
+                    FILE *f);
 int
 ase_homosig_sk_send(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
-                    int fd);
+                    FILE *f);
 int
 ase_homosig_sk_recv(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
-                    int fd);
+                    FILE *f);
 int
 ase_homosig_ctxt_send(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt,
-                      int fd);
+                      FILE *f);
 int
 ase_homosig_ctxt_recv(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt,
-                      int fd);
+                      FILE *f);
 
 void
 ase_homosig_gen(struct ase_pp_t *pp, struct ase_homosig_master_t *msk,

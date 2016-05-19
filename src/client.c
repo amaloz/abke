@@ -60,7 +60,7 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
 }
 
 static int
-_commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
+_commit(block label, block *decom, FILE *f, abke_time_t *comm, abke_time_t *comp)
 {
     block commitment;
     abke_time_t _start, _end;
@@ -80,7 +80,7 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 
     _start = get_time();
     {
-        net_send(fd, &commitment, sizeof commitment, 0);
+        net_send(f, &commitment, sizeof commitment);
     }
     _end = get_time();
     fprintf(stderr, "Send commitment: %f\n", _end - _start);
@@ -91,7 +91,7 @@ _commit(block label, block *decom, int fd, abke_time_t *comm, abke_time_t *comp)
 
 static int
 _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
-       struct ase_ctxt_t *ctxt, const int *attrs, int q, int fd,
+       struct ase_ctxt_t *ctxt, const int *attrs, int q, FILE *f,
        abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
 {
     garble_circuit gc2;
@@ -127,12 +127,10 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
 
     _start = get_time();
     {
-        if (net_recv(fd, &length, sizeof length, 0) == -1)
-            goto cleanup;
+        net_recv(f, &length, sizeof length);
         if ((buf = malloc(length)) == NULL)
             goto cleanup;
-        if (net_recv(fd, buf, length, 0) == -1)
-            goto cleanup;
+        net_recv(f, buf, length);
         memcpy(&gc_seed, buf + p, sizeof gc_seed);
         p += sizeof gc_seed;
         memcpy(&enc_seed, buf + p, sizeof enc_seed);
@@ -218,6 +216,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
           enum ase_type_e type)
 {
     int fd = -1;
+    FILE *f = NULL;
     struct ase_pp_t pp;
     struct ase_master_t mpk;
     struct ase_pk_t pk;
@@ -272,10 +271,14 @@ client_go(const char *host, const char *port, const int *attrs, int m,
         perror("net_init_client");
         goto cleanup;
     }
+    if ((f = fdopen(fd, "r+")) == NULL) {
+        perror("fdopen");
+        goto cleanup;
+    }
 
     _start = get_time();
     {
-        if (ase_pk_send(&pp, &pk, fd, type) == -1)
+        if (ase_pk_send(&pp, &pk, f, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -284,7 +287,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        if (ase_ctxt_recv(&pp, &ctxt, fd, type) == -1)
+        if (ase_ctxt_recv(&pp, &ctxt, f, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -293,7 +296,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     
     _start = get_time();
     {
-        if (gc_comm_recv(fd, &egc) == -1)
+        if (gc_comm_recv(f, &egc) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -320,13 +323,13 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     comp += _end - _start;
     ocomp += _end - _start;
 
-    res = _commit(output_label, &decom, fd, &tmp_comm, &tmp_comp);
+    res = _commit(output_label, &decom, f, &tmp_comm, &tmp_comp);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
     ocomp += tmp_comp;
 
-    res = _check(&pp, &pk, &egc, &ctxt, attrs, q, fd, &tmp_comm, &tmp_comp, type);
+    res = _check(&pp, &pk, &egc, &ctxt, attrs, q, f, &tmp_comm, &tmp_comp, type);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
@@ -334,8 +337,8 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        net_send(fd, &output_label, sizeof output_label, 0);
-        net_send(fd, &decom, sizeof decom, 0);
+        net_send(f, &output_label, sizeof output_label);
+        net_send(f, &decom, sizeof decom);
     }
     _end = get_time();
     fprintf(stderr, "Send decommitment: %f\n", _end - _start);
@@ -348,9 +351,9 @@ client_go(const char *host, const char *port, const int *attrs, int m,
             fprintf(stderr, "RAND_bytes failed\n");
             goto cleanup;
         }
-        net_recv(fd, &acom, sizeof acom, 0);
-        net_send(fd, &b, sizeof b, 0);
-        net_recv(fd, &a, sizeof a, 0);
+        net_recv(f, &acom, sizeof acom);
+        net_send(f, &b, sizeof b);
+        net_recv(f, &a, sizeof a);
         if (garble_unequal(acom, commit(a, garble_zero_block()))) {
             printf("CHEAT: invalid commitment\n");
             goto cleanup;
@@ -377,6 +380,8 @@ cleanup:
         if (egc.ttables)
             free(egc.ttables);
 
+        if (f)
+            fclose(f);
         if (fd != -1)
             close(fd);
     }
@@ -391,7 +396,6 @@ cleanup:
     fprintf(stderr, "Communication:        %f\n", comm);
     fprintf(stderr, "  Bytes sent:     %d\n", g_bytes_sent);
     fprintf(stderr, "  Bytes received: %d\n", g_bytes_rcvd);
-
 
     fprintf(stderr, "Total time:          %f\n", comm + comp);
     fprintf(stderr, "Total time (online): %f\n", comm + ocomp);

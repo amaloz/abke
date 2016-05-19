@@ -2,7 +2,7 @@
 #include "net.h"
 
 int
-gc_comm_send(int sock, ExtGarbledCircuit *egc)
+gc_comm_send(FILE *f, ExtGarbledCircuit *egc)
 {
     char *buf;
     size_t size;
@@ -12,33 +12,29 @@ gc_comm_send(int sock, ExtGarbledCircuit *egc)
     if ((buf = malloc(size)) == NULL)
         return -1;
     garble_to_buffer(&egc->gc, buf, false);
-    if ((res = net_send(sock, &size, sizeof size, 0)) == -1)
-        goto cleanup;
-    res = net_send(sock, buf, size, 0);
-    net_send(sock, egc->ttables, 2 * egc->gc.n * sizeof(block), 0);
-cleanup:
+    net_send(f, &size, sizeof size);
+    net_send(f, buf, size);
+    net_send(f, egc->ttables, 2 * egc->gc.n * sizeof(block));
+
     free(buf);
     return res;
 }
 
 int
-gc_comm_recv(int sock, ExtGarbledCircuit *egc)
+gc_comm_recv(FILE *f, ExtGarbledCircuit *egc)
 {
     size_t size;
     char *buf;
     int res = 0;
 
-    if (net_recv(sock, &size, sizeof size, 0) == -1)
-        return -1;
+    net_recv(f, &size, sizeof size);
     if ((buf = malloc(size)) == NULL)
         return -1;
-    if ((res = net_recv(sock, buf, size, 0)) == -1)
-        goto cleanup;
+    net_recv(f, buf, size);
     res = garble_from_buffer(&egc->gc, buf, false);
     egc->ttables = calloc(2 * egc->gc.n, sizeof(block));
-    net_recv(sock, egc->ttables, 2 * egc->gc.n * sizeof(block), 0);
+    net_recv(f, egc->ttables, 2 * egc->gc.n * sizeof(block));
 
-cleanup:
     free(buf);
     return res;
 }

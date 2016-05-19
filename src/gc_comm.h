@@ -4,9 +4,9 @@
 #include "gc.h"
 
 int
-gc_comm_send(int sock, ExtGarbledCircuit *egc);
+gc_comm_send(FILE *f, ExtGarbledCircuit *egc);
 int
-gc_comm_recv(int sock, ExtGarbledCircuit *egc);
+gc_comm_recv(FILE *f, ExtGarbledCircuit *egc);
 
 
 #endif

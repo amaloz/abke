@@ -16,13 +16,13 @@ int g_bytes_sent = 0;
 int g_bytes_rcvd = 0;
 
 int
-net_send(int socket, const void *buffer, size_t length, int flags)
+net_send(FILE *f, const void *buffer, size_t length)
 {
     size_t total = 0;
     ssize_t bytesleft = length;
 
     while (total < length) {
-        ssize_t n = send(socket, buffer + total, bytesleft, flags);
+        ssize_t n = fwrite(buffer + total, 1, bytesleft, f);
         if (n == -1) {
             perror("send");
             return -1;
@@ -35,13 +35,13 @@ net_send(int socket, const void *buffer, size_t length, int flags)
 }
 
 int
-net_recv(int socket, void *buffer, size_t length, int flags)
+net_recv(FILE *f, void *buffer, size_t length)
 {
     size_t total = 0;
     ssize_t bytesleft = length;
 
     while (total < length) {
-        ssize_t n = recv(socket, buffer + total, bytesleft, flags);
+        ssize_t n = fread(buffer + total, 1, bytesleft, f);
         if (n == -1) {
             perror("recv");
             return -1;

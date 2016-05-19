@@ -61,13 +61,13 @@ _connect_to_ca(struct ase_pp_t *pp, struct ase_master_t *mpk,
 
 static int
 _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
-        int fd, abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
+        FILE *f, abke_time_t *comm, abke_time_t *comp, enum ase_type_e type)
 {
     abke_time_t _start, _end;
 
     _start = get_time();
     {
-        ase_pk_recv(pp, pk, fd, type);
+        ase_pk_recv(pp, pk, f, type);
     }
     _end = get_time();
     fprintf(stderr, "Receive public key: %f\n", _end - _start);
@@ -119,7 +119,7 @@ _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
 static int
 _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
                             unsigned int enc_seed, element_t *inputs,
-                            int fd, abke_time_t *total)
+                            FILE *f, abke_time_t *total)
 {
     int res = 0;
     abke_time_t _start, _end;
@@ -133,8 +133,7 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
         for (int i = 0; i < 2 * pp->m; ++i) {
             length += element_length_in_bytes_(inputs[i]);
         }
-        if (net_send(fd, &length, sizeof length, 0) == -1)
-            return -1;
+        net_send(f, &length, sizeof length);
         if ((buf = malloc(length)) == NULL)
             return -1;
         memcpy(buf + p, &gc_seed, sizeof gc_seed);
@@ -144,7 +143,7 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
         for (int i = 0; i < 2 * pp->m; ++i) {
             p += element_to_bytes_(buf + p, inputs[i]);
         }
-        res = net_send(fd, buf, length, 0);
+        net_send(f, buf, length);
         free(buf);
     }
     _end = get_time();
@@ -160,6 +159,7 @@ server_go(const char *host, const char *port, int m, int q,
           const char *param, struct measurement_t *measurements,
           enum ase_type_e type)
 {
+    FILE *f = NULL;
     int sockfd = -1, fd = -1;
     block gc_seed, commitment;
     struct ase_pp_t pp;
@@ -256,8 +256,12 @@ server_go(const char *host, const char *port, int m, int q,
         perror("net_server_accept");
         exit(EXIT_FAILURE);
     }
+    if ((f = fdopen(fd, "r+")) == NULL) {
+        perror("fdopen");
+        exit(EXIT_FAILURE);
+    }
 
-    res = _get_pk(&pp, &mpk, &client_pk, fd, &tmp_comm, &tmp_comp, type);
+    res = _get_pk(&pp, &mpk, &client_pk, f, &tmp_comm, &tmp_comp, type);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
@@ -276,7 +280,7 @@ server_go(const char *host, const char *port, int m, int q,
 
     _start = get_time();
     {
-        if (ase_ctxt_send(&pp, &ctxt, fd, type) == -1)
+        if (ase_ctxt_send(&pp, &ctxt, f, type) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -285,7 +289,7 @@ server_go(const char *host, const char *port, int m, int q,
 
     _start = get_time();
     {
-        if (gc_comm_send(fd, &egc) == -1)
+        if (gc_comm_send(f, &egc) == -1)
             goto cleanup;
     }
     _end = get_time();
@@ -294,14 +298,13 @@ server_go(const char *host, const char *port, int m, int q,
 
     _start = get_time();
     {
-        if (net_recv(fd, &commitment, sizeof commitment, 0) == -1)
-            goto cleanup;
+        net_recv(f, &commitment, sizeof commitment);
     }
     _end = get_time();
     fprintf(stderr, "Receive commitment: %f\n", _end - _start);
     comm += _end - _start;
 
-    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, fd, &comm);
+    res = _send_randomness_and_inputs(&pp, gc_seed, enc_seed, inputs, f, &comm);
     if (res == -1) goto cleanup;
 
     {
@@ -309,8 +312,8 @@ server_go(const char *host, const char *port, int m, int q,
 
         _start = get_time();
         {
-            net_recv(fd, &output_label, sizeof output_label, 0);
-            net_recv(fd, &r, sizeof r, 0);
+            net_recv(f, &output_label, sizeof output_label);
+            net_recv(f, &r, sizeof r);
         }
         _end = get_time();
         fprintf(stderr, "Receive decommitment: %f\n", _end - _start);
@@ -353,15 +356,14 @@ server_go(const char *host, const char *port, int m, int q,
 
         _start = get_time();
         {
-            net_send(fd, &acom, sizeof acom, 0);
-            net_recv(fd, &b, sizeof b, 0);
-            net_send(fd, &a, sizeof a, 0);
+            net_send(f, &acom, sizeof acom);
+            net_recv(f, &b, sizeof b);
+            net_send(f, &a, sizeof a);
             key = garble_xor(a, b);
         }
         _end = get_time();
         fprintf(stderr, "Coin tossing: %f\n", _end - _start);
         comm += _end - _start;
-
     }
 
     res = 0;
@@ -386,6 +388,8 @@ cleanup:
             garble_delete(&egc.gc);
         free(egc.ttables);
 
+        if (f)
+            fclose(f);
         if (fd != -1)
             close(fd);
         if (sockfd != -1)

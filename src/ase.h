@@ -98,31 +98,31 @@ ase_ctxt_clear(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
 
 
 int
-ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master, int fd,
+ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master, FILE *f,
              enum ase_type_e type);
 int
-ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, int fd,
+ase_mpk_recv(struct ase_pp_t *pp, struct ase_master_t *master, FILE *f,
              enum ase_type_e type);
 
 int
-ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
+ase_pk_send(const struct ase_pp_t *pp, struct ase_pk_t *pk, FILE * f,
             enum ase_type_e type);
 int
-ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, int fd,
-            enum ase_type_e type);
-
-int
-ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
-            enum ase_type_e type);
-int
-ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, int fd,
+ase_pk_recv(const struct ase_pp_t *pp, struct ase_pk_t *pk, FILE *f,
             enum ase_type_e type);
 
 int
-ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd,
+ase_sk_send(const struct ase_pp_t *pp, struct ase_sk_t *sk, FILE *f,
+            enum ase_type_e type);
+int
+ase_sk_recv(const struct ase_pp_t *pp, struct ase_sk_t *sk, FILE *f,
+            enum ase_type_e type);
+
+int
+ase_ctxt_send(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, FILE *f,
               enum ase_type_e type);
 int
-ase_ctxt_recv(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, int fd,
+ase_ctxt_recv(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt, FILE *f,
               enum ase_type_e type);
 
 
