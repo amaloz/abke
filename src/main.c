@@ -212,6 +212,17 @@ main(int argc, char *argv[])
         printf("Error: No role specified\n");
         return usage();
     } else {
+        if (core_init() != STS_OK) {
+            core_clean();
+            return EXIT_FAILURE;
+        }
+
+        if (pc_param_set_any() != STS_OK) {
+            core_clean();
+            return EXIT_FAILURE;
+        }
+
+        /* pc_param_print(); */
         res = go(&args);
     }
 

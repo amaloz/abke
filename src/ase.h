@@ -2,13 +2,12 @@
 #define ABKE_ASE_H
 
 #include "bls.h"
-#include <pbc/pbc.h>
 
 enum ase_type_e { ASE_HOMOSIG, ASE_BONFRA, ASE_NONE };
 
 struct ase_pp_t {
     int m;
-    pairing_t pairing;
+    /* pairing_t pairing; */
 };
 
 struct ase_homosig_master_t {
@@ -25,10 +24,10 @@ struct ase_master_t {
 };
 
 struct ase_homosig_pk_t {
-    element_t g, h, u;
-    element_t gsig, hsig, usig;
-    element_t *es;
-    element_t *esigs;
+    g1_t g, h, u;
+    g1_t gsig, hsig, usig;
+    g1_t *es;
+    g1_t *esigs;
 };
 
 struct ase_pk_t {
@@ -38,7 +37,7 @@ struct ase_pk_t {
 };
 
 struct ase_homosig_sk_t {
-    element_t *rs;
+    bn_t *rs;
 };
 
 struct ase_sk_t {
@@ -48,8 +47,8 @@ struct ase_sk_t {
 };
 
 struct ase_homosig_ctxt_t {
-    element_t g, h;
-    element_t *c2s;
+    g1_t g, h;
+    g1_t *c2s;
 };
 
 struct ase_ctxt_t {
@@ -96,6 +95,18 @@ void
 ase_ctxt_clear(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
                enum ase_type_e type);
 
+void
+ase_mpk_print(const struct ase_pp_t *pp, struct ase_master_t *master,
+              enum ase_type_e type);
+void
+ase_pk_print(const struct ase_pp_t *pp, struct ase_pk_t *pk,
+             enum ase_type_e type);
+void
+ase_sk_print(const struct ase_pp_t *pp, struct ase_sk_t *sk,
+             enum ase_type_e type);
+void
+ase_ctxt_print(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
+               enum ase_type_e type);
 
 int
 ase_mpk_send(const struct ase_pp_t *pp, struct ase_master_t *master, FILE *f,
@@ -134,15 +145,11 @@ int
 ase_vrfy(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
          enum ase_type_e type);
 void
-ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk,
-        struct ase_ctxt_t *ciphertext, element_t *plaintext,
+ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk, const int *attrs,
+        struct ase_ctxt_t *ciphertext, g1_t *plaintext,
         const unsigned int *seed, enum ase_type_e type);
 void
-ase_enc_select(struct ase_pp_t *pp, struct ase_pk_t *pk, const int *attrs,
-               struct ase_ctxt_t *ciphertext, element_t *plaintext,
-               const unsigned int *seed, enum ase_type_e type);
-void
-ase_dec(struct ase_pp_t *pp, struct ase_sk_t *sk, element_t *plaintext,
+ase_dec(struct ase_pp_t *pp, struct ase_sk_t *sk, g1_t *plaintext,
         struct ase_ctxt_t *ciphertext, const int *attrs, enum ase_type_e type);
 void
 ase_unlink(struct ase_pp_t *pp, struct ase_pk_t *rpk, struct ase_sk_t *rsk,

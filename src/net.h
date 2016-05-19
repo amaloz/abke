@@ -2,7 +2,7 @@
 #define __NET_H
 
 #include <netinet/in.h>
-#include <pbc/pbc.h>
+#include <stdio.h>
 
 extern int g_bytes_sent, g_bytes_rcvd;
 

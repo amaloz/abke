@@ -8,28 +8,28 @@
 int
 ase_pp_init(struct ase_pp_t *pp, int m, const char *fname)
 {
-    char *param;
-    size_t count, fsize;
-    FILE *f;
-    int res;
+    /* char *param; */
+    /* size_t count, fsize; */
+    /* FILE *f; */
+    int res = 0;
 
     pp->m = m;
 
-    if ((f = fopen(fname, "r")) == NULL) {
-        pbc_die("fopen");
-    }
+    /* if ((f = fopen(fname, "r")) == NULL) { */
+    /*     pbc_die("fopen"); */
+    /* } */
 
-    fsize = filesize(fname);
-    param = malloc(fsize);
+    /* fsize = filesize(fname); */
+    /* param = malloc(fsize); */
 
-    count = fread(param, sizeof(char), fsize, f);
-    if (!count) {
-        pbc_die("fread");
-    }
-    res = pairing_init_set_buf(pp->pairing, param, count);
+    /* count = fread(param, sizeof(char), fsize, f); */
+    /* if (!count) { */
+    /*     pbc_die("fread"); */
+    /* } */
+    /* res = pairing_init_set_buf(pp->pairing, param, count); */
 
-    free(param);
-    fclose(f);
+    /* free(param); */
+    /* fclose(f); */
 
     return res;
 }
@@ -37,7 +37,7 @@ ase_pp_init(struct ase_pp_t *pp, int m, const char *fname)
 void
 ase_pp_clear(struct ase_pp_t *pp)
 {
-    pairing_clear(pp->pairing);
+    /* pairing_clear(pp->pairing); */
 }
 
 void
@@ -178,6 +178,62 @@ ase_ctxt_clear(struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
     }
 }
 
+void
+ase_mpk_print(const struct ase_pp_t *pp, struct ase_master_t *master,
+              enum ase_type_e type)
+{
+    switch (type) {
+    case ASE_HOMOSIG:
+        ase_homosig_mpk_print(pp, &master->homosig);
+        break;
+    default:
+        assert(0);
+        abort();
+    }
+}
+
+void
+ase_pk_print(const struct ase_pp_t *pp, struct ase_pk_t *pk,
+             enum ase_type_e type)
+{
+    switch (type) {
+    case ASE_HOMOSIG:
+        ase_homosig_pk_print(pp, &pk->homosig);
+        break;
+    default:
+        assert(0);
+        abort();
+    }
+}
+
+void
+ase_sk_print(const struct ase_pp_t *pp, struct ase_sk_t *sk,
+             enum ase_type_e type)
+{
+    switch (type) {
+    case ASE_HOMOSIG:
+        ase_homosig_sk_print(pp, &sk->homosig);
+        break;
+    default:
+        assert(0);
+        abort();
+    }
+}
+
+void
+ase_ctxt_print(const struct ase_pp_t *pp, struct ase_ctxt_t *ctxt,
+               enum ase_type_e type)
+{
+    switch (type) {
+    case ASE_HOMOSIG:
+        ase_homosig_ctxt_print(pp, &ctxt->homosig);
+        break;
+    default:
+        assert(0);
+        abort();
+    }
+}
+
 /* Send/receive functions */
 
 int
@@ -301,8 +357,7 @@ ase_gen(struct ase_pp_t *pp, struct ase_master_t *msk,
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_gen(pp, &msk->homosig, &pk->homosig, &sk->homosig,
-                               attrs);
+        ase_homosig_gen(pp, &msk->homosig, &pk->homosig, &sk->homosig, attrs);
         break;
     default:
         assert(0);
@@ -325,14 +380,14 @@ ase_vrfy(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
 }
 
 void
-ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk,
-        struct ase_ctxt_t *ciphertext, element_t *plaintext,
+ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk, const int *attrs,
+        struct ase_ctxt_t *ciphertext, g1_t *plaintext,
         const unsigned int *seed, enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_enc(pp, &pk->homosig, &ciphertext->homosig,
-                               plaintext, seed);
+        ase_homosig_enc(pp, &pk->homosig, attrs, &ciphertext->homosig,
+                        plaintext, seed);
         break;
     default:
         assert(0);
@@ -341,28 +396,12 @@ ase_enc(struct ase_pp_t *pp, struct ase_pk_t *pk,
 }
 
 void
-ase_enc_select(struct ase_pp_t *pp, struct ase_pk_t *pk, const int *attrs,
-               struct ase_ctxt_t *ciphertext, element_t *plaintext,
-               const unsigned int *seed, enum ase_type_e type)
-{
-    switch (type) {
-    case ASE_HOMOSIG:
-        return ase_homosig_enc_select(pp, &pk->homosig, attrs,
-                                      &ciphertext->homosig, plaintext, seed);
-        break;
-    default:
-        assert(0);
-        abort();
-    }
-}
-
-void
-ase_dec(struct ase_pp_t *pp, struct ase_sk_t *sk, element_t *plaintext,
+ase_dec(struct ase_pp_t *pp, struct ase_sk_t *sk, g1_t *plaintext,
         struct ase_ctxt_t *ciphertext, const int *attrs, enum ase_type_e type)
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_dec(pp, &sk->homosig, plaintext,
+        ase_homosig_dec(pp, &sk->homosig, plaintext,
                                &ciphertext->homosig, attrs);
         break;
     default:
@@ -377,8 +416,8 @@ ase_unlink(struct ase_pp_t *pp, struct ase_pk_t *rpk, struct ase_sk_t *rsk,
 {
     switch (type) {
     case ASE_HOMOSIG:
-        return ase_homosig_unlink(pp, &rpk->homosig, &rsk->homosig,
-                                  &pk->homosig, &sk->homosig);
+        ase_homosig_unlink(pp, &rpk->homosig, &rsk->homosig,
+                           &pk->homosig, &sk->homosig);
         break;
     default:
         assert(0);

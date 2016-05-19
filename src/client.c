@@ -37,13 +37,14 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
          struct ase_ctxt_t *ctxt, block *input_labels,
          block *ttables, const int *attrs, enum ase_type_e type)
 {
-    element_t *inputs;
+    g1_t *inputs;
     AES_KEY key;
     block blk;
 
-    inputs = calloc(pp->m, sizeof(element_t));
+    inputs = calloc(pp->m, sizeof(g1_t));
     for (int i = 0; i < pp->m; ++i) {
-        element_init_G1(inputs[i], pp->pairing);
+        g1_new(inputs[i]);
+        g1_get_gen(inputs[i]);
     }
     ase_dec(pp, sk, inputs, ctxt, attrs, type);
     for (int i = 0; i < pp->m; ++i) {
@@ -53,7 +54,7 @@ _decrypt(struct ase_pp_t *pp, struct ase_sk_t *sk,
         AES_ecb_decrypt_blks(&input_labels[i], 1, &key);
     }
     for (int i = 0; i < pp->m; ++i) {
-        element_clear(inputs[i]);
+        g1_free(inputs[i]);
     }
     free(inputs);
     return 0;
@@ -98,7 +99,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     int gc_built = 0;
     unsigned char gc_hash[SHA_DIGEST_LENGTH];
     struct ase_ctxt_t claimed_ctxt;
-    element_t *claimed_inputs;
+    g1_t *claimed_inputs;
     block *claimed_input_labels;
     block gc_seed;
     unsigned int enc_seed;
@@ -112,9 +113,10 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     _start = get_time();
     {
         ase_ctxt_init(pp, &claimed_ctxt, type);
-        claimed_inputs = calloc(2 * pp->m, sizeof(element_t));
+        claimed_inputs = calloc(2 * pp->m, sizeof(g1_t));
         for (int i = 0; i < 2 * pp->m; ++i) {
-            element_init_G1(claimed_inputs[i], pp->pairing);
+            g1_new(claimed_inputs[i]);
+            g1_get_gen(claimed_inputs[i]);
         }
         claimed_input_labels = garble_allocate_blocks(2 * pp->m);
         flipped_attrs = calloc(pp->m, sizeof(int));
@@ -136,7 +138,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
         memcpy(&enc_seed, buf + p, sizeof enc_seed);
         p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_from_bytes_(claimed_inputs[i], buf + p);
+            p += g1_from_bytes_(claimed_inputs[i], buf + p);
         }
     }
     _end = get_time();
@@ -144,15 +146,13 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
 
     _start = get_time();
     res = -1;
-
     /* Check if claimed inputs decrypt correctly */
-    ase_enc_select(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs,
-                   &enc_seed, type);
+    ase_enc(pp, pk, flipped_attrs, &claimed_ctxt, claimed_inputs, &enc_seed, type);
     for (int i = 0; i < pp->m; ++i) {
         switch (type) {
         case ASE_HOMOSIG:
-            if (element_cmp(claimed_ctxt.homosig.c2s[2 * i + flipped_attrs[i]],
-                            ctxt->homosig.c2s[2 * i + flipped_attrs[i]])) {
+            if (g1_cmp(claimed_ctxt.homosig.c2s[2 * i + flipped_attrs[i]],
+                       ctxt->homosig.c2s[2 * i + flipped_attrs[i]])) {
                 printf("CHEAT: input %d doesn't check out\n", i);
                 goto cleanup;
             }
@@ -189,7 +189,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
 cleanup:
     free(buf);
     for (int i = 0; i < 2 * pp->m; ++i) {
-        element_clear(claimed_inputs[i]);
+        g1_free(claimed_inputs[i]);
     }
     free(claimed_inputs);
     free(claimed_input_labels);
@@ -260,7 +260,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        ase_unlink(&pp, &pk, &sk, &pk, &sk, type);
+        /* ase_unlink(&pp, &pk, &sk, &pk, &sk, type); */
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);

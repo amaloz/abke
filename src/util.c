@@ -4,7 +4,67 @@
 #include <openssl/sha.h>
 #include <sys/stat.h>
 
+#ifndef MIN
 #define MIN(a, b) (a) < (b) ? (a) : (b)
+#endif
+
+#define COMPRESS 1
+
+size_t
+g1_length_in_bytes_(g1_t e)
+{
+    return g1_size_bin(e, COMPRESS);
+}
+size_t
+g2_length_in_bytes_(g2_t e)
+{
+    return g2_size_bin(e, COMPRESS);
+}
+
+size_t
+g1_to_bytes_(uint8_t *buf, g1_t e)
+{
+    size_t size = g1_size_bin(e, COMPRESS);
+    g1_write_bin(buf, size, e, COMPRESS);
+    return size;
+}
+size_t
+g2_to_bytes_(uint8_t *buf, g2_t e)
+{
+    size_t size = g2_size_bin(e, COMPRESS);
+    g2_write_bin(buf, size, e, COMPRESS);
+    return size;
+}
+size_t
+bn_to_bytes_(uint64_t *buf, bn_t e)
+{
+    size_t size = bn_size_raw(e);
+    bn_write_raw(buf, size, e);
+    return size;
+}
+
+size_t
+g1_from_bytes_(g1_t e, uint8_t *buf)
+{
+    size_t size = g1_size_bin(e, COMPRESS);
+    g1_read_bin(e, buf, size);
+    return size;
+}
+size_t
+g2_from_bytes_(g2_t e, uint8_t *buf)
+{
+    size_t size = g2_size_bin(e, COMPRESS);
+    g2_read_bin(e, buf, size);
+    return size;
+}
+size_t
+bn_from_bytes_(bn_t e, uint64_t *buf)
+{
+    size_t size = bn_size_raw(e);
+    bn_read_raw(e, buf, size);
+    return size;
+}
+
 
 int
 countToN(int *a, int n)
@@ -65,23 +125,8 @@ filesize(const char *fname)
 	return -1;
 }
 
-/* block */
-/* element_to_block(element_t elem) */
-/* { */
-/*     int length; */
-/*     unsigned char *buf; */
-/*     block out; */
-
-/*     length = element_length_in_bytes_(elem); */
-/*     buf = malloc(length); */
-/*     (void) element_to_bytes_(buf, elem); */
-/*     sha1_hash((char *) &out, sizeof out, buf, length); */
-/*     free(buf); */
-/*     return out; */
-/* } */
-
 block
-hash(element_t elem, int idx, bool bit)
+hash(g1_t elem, int idx, bool bit)
 {
     SHA256_CTX sha;
     int length;
@@ -89,11 +134,9 @@ hash(element_t elem, int idx, bool bit)
     unsigned char h[SHA256_DIGEST_LENGTH];
     block out;
 
-    /* element_printf("Hashing %B || %d || %d\n", elem, idx, bit); */
-
-    length = element_length_in_bytes_(elem);
+    length = g1_size_bin(elem, 1);
     buf = malloc(length);
-    (void) element_to_bytes_(buf, elem);
+    (void) g1_write_bin(buf, length, elem, 1);
 
     SHA256_Init(&sha);
     SHA256_Update(&sha, &idx, sizeof idx);
@@ -101,7 +144,6 @@ hash(element_t elem, int idx, bool bit)
     SHA256_Update(&sha, buf, length);
     SHA256_Final(h, &sha);
     memcpy(&out, h, sizeof out);
-    /* block_printf("Result: %B\n", out); */
     free(buf);
     return out;
 }
@@ -141,3 +183,24 @@ commit(block in, block r)
     return out;
 }
 
+/* taken from pbc_get_time() */
+double
+get_time(void)
+{
+    static struct timeval last_tv, tv;
+    static int first = 1;
+    static double res = 0;
+
+    if (first) {
+        gettimeofday(&last_tv, NULL);
+        first = 0;
+        return 0;
+    } else {
+        gettimeofday(&tv, NULL);
+        res += tv.tv_sec - last_tv.tv_sec;
+        res += (tv.tv_usec - last_tv.tv_usec) / 1000000.0;
+        last_tv = tv;
+
+        return res;
+    }
+}

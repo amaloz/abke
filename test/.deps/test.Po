@@ -1,0 +1,198 @@
+test.o: test.c /usr/include/stdc-predef.h ../src/bls.h \
+ /usr/local/include/relic/relic.h /usr/local/include/relic/relic_arch.h \
+ /usr/local/include/relic/relic_types.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stdint.h \
+ /usr/include/stdint.h /usr/include/features.h /usr/include/sys/cdefs.h \
+ /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h \
+ /usr/include/gnu/stubs-64.h /usr/include/bits/wchar.h \
+ /usr/local/include/relic/relic_conf.h \
+ /usr/local/include/relic/relic_label.h \
+ /usr/local/include/relic/relic_core.h /usr/include/stdlib.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stddef.h \
+ /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h \
+ /usr/include/endian.h /usr/include/bits/endian.h \
+ /usr/include/bits/byteswap.h /usr/include/bits/types.h \
+ /usr/include/bits/typesizes.h /usr/include/bits/byteswap-16.h \
+ /usr/include/sys/types.h /usr/include/time.h /usr/include/sys/select.h \
+ /usr/include/bits/select.h /usr/include/bits/sigset.h \
+ /usr/include/bits/time.h /usr/include/sys/sysmacros.h \
+ /usr/include/bits/pthreadtypes.h /usr/include/alloca.h \
+ /usr/include/bits/stdlib-bsearch.h /usr/include/bits/stdlib-float.h \
+ /usr/include/stdio.h /usr/include/libio.h /usr/include/_G_config.h \
+ /usr/include/wchar.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stdarg.h \
+ /usr/include/bits/stdio_lim.h /usr/include/bits/sys_errlist.h \
+ /usr/include/bits/stdio.h /usr/include/string.h /usr/include/xlocale.h \
+ /usr/include/bits/string.h /usr/include/bits/string2.h \
+ /usr/include/ctype.h /usr/local/include/relic/relic_err.h \
+ /usr/include/setjmp.h /usr/include/bits/setjmp.h \
+ /usr/local/include/relic/relic_util.h \
+ /usr/local/include/relic/relic_bn.h /usr/local/include/relic/relic_eb.h \
+ /usr/local/include/relic/relic_fb.h /usr/local/include/relic/relic_dv.h \
+ /usr/local/include/relic/relic_epx.h \
+ /usr/local/include/relic/relic_fpx.h /usr/local/include/relic/relic_fp.h \
+ /usr/local/include/relic/relic_ep.h /usr/local/include/relic/relic_ed.h \
+ /usr/local/include/relic/relic_bench.h /usr/include/sys/time.h \
+ /usr/local/include/relic/relic_rand.h \
+ /usr/local/include/relic/relic_pool.h \
+ /usr/local/include/relic/relic_fbx.h /usr/local/include/relic/relic_ec.h \
+ /usr/local/include/relic/relic_pp.h /usr/local/include/relic/relic_pc.h \
+ /usr/local/include/relic/relic_cp.h /usr/local/include/relic/relic_bc.h \
+ /usr/local/include/relic/relic_md.h ../src/ase.h ../src/bls.h \
+ ../src/ase_homosig.h ../src/ase.h
+
+/usr/include/stdc-predef.h:
+
+../src/bls.h:
+
+/usr/local/include/relic/relic.h:
+
+/usr/local/include/relic/relic_arch.h:
+
+/usr/local/include/relic/relic_types.h:
+
+/usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stdint.h:
+
+/usr/include/stdint.h:
+
+/usr/include/features.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-64.h:
+
+/usr/include/bits/wchar.h:
+
+/usr/local/include/relic/relic_conf.h:
+
+/usr/local/include/relic/relic_label.h:
+
+/usr/local/include/relic/relic_core.h:
+
+/usr/include/stdlib.h:
+
+/usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stddef.h:
+
+/usr/include/bits/waitflags.h:
+
+/usr/include/bits/waitstatus.h:
+
+/usr/include/endian.h:
+
+/usr/include/bits/endian.h:
+
+/usr/include/bits/byteswap.h:
+
+/usr/include/bits/types.h:
+
+/usr/include/bits/typesizes.h:
+
+/usr/include/bits/byteswap-16.h:
+
+/usr/include/sys/types.h:
+
+/usr/include/time.h:
+
+/usr/include/sys/select.h:
+
+/usr/include/bits/select.h:
+
+/usr/include/bits/sigset.h:
+
+/usr/include/bits/time.h:
+
+/usr/include/sys/sysmacros.h:
+
+/usr/include/bits/pthreadtypes.h:
+
+/usr/include/alloca.h:
+
+/usr/include/bits/stdlib-bsearch.h:
+
+/usr/include/bits/stdlib-float.h:
+
+/usr/include/stdio.h:
+
+/usr/include/libio.h:
+
+/usr/include/_G_config.h:
+
+/usr/include/wchar.h:
+
+/usr/lib/gcc/x86_64-pc-linux-gnu/6.1.1/include/stdarg.h:
+
+/usr/include/bits/stdio_lim.h:
+
+/usr/include/bits/sys_errlist.h:
+
+/usr/include/bits/stdio.h:
+
+/usr/include/string.h:
+
+/usr/include/xlocale.h:
+
+/usr/include/bits/string.h:
+
+/usr/include/bits/string2.h:
+
+/usr/include/ctype.h:
+
+/usr/local/include/relic/relic_err.h:
+
+/usr/include/setjmp.h:
+
+/usr/include/bits/setjmp.h:
+
+/usr/local/include/relic/relic_util.h:
+
+/usr/local/include/relic/relic_bn.h:
+
+/usr/local/include/relic/relic_eb.h:
+
+/usr/local/include/relic/relic_fb.h:
+
+/usr/local/include/relic/relic_dv.h:
+
+/usr/local/include/relic/relic_epx.h:
+
+/usr/local/include/relic/relic_fpx.h:
+
+/usr/local/include/relic/relic_fp.h:
+
+/usr/local/include/relic/relic_ep.h:
+
+/usr/local/include/relic/relic_ed.h:
+
+/usr/local/include/relic/relic_bench.h:
+
+/usr/include/sys/time.h:
+
+/usr/local/include/relic/relic_rand.h:
+
+/usr/local/include/relic/relic_pool.h:
+
+/usr/local/include/relic/relic_fbx.h:
+
+/usr/local/include/relic/relic_ec.h:
+
+/usr/local/include/relic/relic_pp.h:
+
+/usr/local/include/relic/relic_pc.h:
+
+/usr/local/include/relic/relic_cp.h:
+
+/usr/local/include/relic/relic_bc.h:
+
+/usr/local/include/relic/relic_md.h:
+
+../src/ase.h:
+
+../src/bls.h:
+
+../src/ase_homosig.h:
+
+../src/ase.h:

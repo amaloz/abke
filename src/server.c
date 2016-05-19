@@ -98,14 +98,14 @@ _get_pk(struct ase_pp_t *pp, struct ase_master_t *mpk, struct ase_pk_t *pk,
 
 static int
 _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
-         struct ase_ctxt_t *ctxt, element_t *inputs,
+         struct ase_ctxt_t *ctxt, g1_t *inputs,
          unsigned int *seed, enum ase_type_e type)
 {
     if (RAND_bytes((unsigned char *) seed, sizeof(unsigned int)) == 0) {
         fprintf(stderr, "RAND_bytes failed\n");
         return -1;
     }
-    ase_enc(pp, pk, ctxt, inputs, seed, type);
+    ase_enc(pp, pk, NULL, ctxt, inputs, seed, type);
 #ifdef THPOOL
     thpool_wait(g_thpool);
     if (g_thpool_args.result != 1) {
@@ -118,7 +118,7 @@ _encrypt(struct ase_pp_t *pp, struct ase_pk_t *pk,
 
 static int
 _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
-                            unsigned int enc_seed, element_t *inputs,
+                            unsigned int enc_seed, g1_t *inputs,
                             FILE *f, abke_time_t *total)
 {
     int res = 0;
@@ -131,7 +131,7 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
         length += sizeof gc_seed;
         length += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            length += element_length_in_bytes_(inputs[i]);
+            length += g1_length_in_bytes_(inputs[i]);
         }
         net_send(f, &length, sizeof length);
         if ((buf = malloc(length)) == NULL)
@@ -141,7 +141,7 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
         memcpy(buf + p, &enc_seed, sizeof enc_seed);
         p += sizeof enc_seed;
         for (int i = 0; i < 2 * pp->m; ++i) {
-            p += element_to_bytes_(buf + p, inputs[i]);
+            p += g1_to_bytes_(buf + p, inputs[i]);
         }
         net_send(f, buf, length);
         free(buf);
@@ -168,7 +168,7 @@ server_go(const char *host, const char *port, int m, int q,
     struct ase_ctxt_t ctxt;
     ExtGarbledCircuit egc;
     int gc_built = 0;
-    element_t *inputs;
+    g1_t *inputs;
     block *input_labels, output_labels[2];
     block key = garble_zero_block();
     unsigned int enc_seed;
@@ -190,12 +190,13 @@ server_go(const char *host, const char *port, int m, int q,
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
         ase_pp_init(&pp, m, param);
-        ase_mpk_init(&pp, &mpk, type);
+        ase_master_init(&pp, &mpk, type);
         ase_pk_init(&pp, &client_pk, type);
         ase_ctxt_init(&pp, &ctxt, type);
-        inputs = calloc(2 * pp.m, sizeof(element_t));
+        inputs = calloc(2 * pp.m, sizeof(g1_t));
         for (int i = 0; i < 2 * pp.m; ++i) {
-            element_init_G1(inputs[i], pp.pairing);
+            g1_new(inputs[i]);
+            g1_get_gen(inputs[i]);
         }
         egc.ttables = calloc(2 * pp.m, sizeof(block));
         input_labels = garble_allocate_blocks(2 * pp.m);
@@ -212,14 +213,13 @@ server_go(const char *host, const char *port, int m, int q,
 
     _start = get_time();
     for (int i = 0; i < 2 * pp.m; ++i) {
-        AES_KEY key;
+        AES_KEY aeskey;
         block blk;
 
-        element_random(inputs[i]);
         blk = hash(inputs[i], i / 2, i % 2);
-        AES_set_encrypt_key(blk, &key);
+        AES_set_encrypt_key(blk, &aeskey);
         egc.ttables[i] = input_labels[i];
-        AES_ecb_encrypt_blks(&egc.ttables[i], 1, &key);
+        AES_ecb_encrypt_blks(&egc.ttables[i], 1, &aeskey);
     }
     _end = get_time();
     fprintf(stderr, "Generate random inputs and translation table: %f\n",
@@ -261,7 +261,14 @@ server_go(const char *host, const char *port, int m, int q,
         exit(EXIT_FAILURE);
     }
 
+    /* ase_pk_recv(&pp, &client_pk, f, type); */
     res = _get_pk(&pp, &mpk, &client_pk, f, &tmp_comm, &tmp_comp, type);
+    struct ase_sk_t client_sk;
+    int *attrs;
+    attrs = calloc(pp.m, sizeof(int));
+    for (int i = 0; i < pp.m; ++i)
+        attrs[i] = 1;
+    ase_sk_init(&pp, &client_sk, type);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
@@ -374,14 +381,14 @@ cleanup:
         thpool_destroy(g_thpool);
 #endif
         for (int i = 0; i < 2 * m; ++i) {
-            element_clear(inputs[i]);
+            g1_free(inputs[i]);
         }
         free(inputs);
         free(input_labels);
 
         ase_ctxt_clear(&pp, &ctxt, type);
         ase_pk_clear(&pp, &client_pk, type);
-        ase_mpk_clear(&pp, &mpk, type);
+        ase_master_clear(&pp, &mpk, type);
         ase_pp_clear(&pp);
 
         if (gc_built)

@@ -41,7 +41,7 @@ loop(int sockfd, struct ase_pp_t *pp, struct ase_master_t *master,
         fprintf(stderr, "INVALID!\n");
         return -1;
     }
-    
+
     ase_mpk_send(pp, master, f, type);
     if (role == ROLE_CLIENT) {
         int *attrs;
@@ -86,11 +86,11 @@ ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
 
     net_send(f, &role, sizeof role);
     ase_mpk_recv(pp, mpk, f, type);
-    if (role == ROLE_CLIENT) {
+     if (role == ROLE_CLIENT) {
         net_send(f, attrs, sizeof(int) * pp->m);
         ase_pk_recv(pp, pk, f, type);
         ase_sk_recv(pp, sk, f, type);
-    }
+     }
     fclose(f);
     close(cafd);
     return 0;
@@ -106,7 +106,7 @@ ca_init(const char *host, const char *port, int m, int ntimes,
     block seed;
     int nconnected = 0;
 
-    fprintf(stderr, "Starting CA with m = %d and pairing %s\n", m, param);
+    fprintf(stderr, "Starting CA with m = %d\n", m);
     
     if ((sockfd = net_init_server(host, port)) == -1) {
         perror("net_init_server");
@@ -119,7 +119,7 @@ ca_init(const char *host, const char *port, int m, int ntimes,
     if (ase_pp_init(&pp, m, param))
         return -1;
     ase_master_init(&pp, &master, type);
-
+ 
     while (nconnected < 2 * ntimes * ntimes) {
         if (loop(sockfd, &pp, &master, type) == -1)
             return -1;

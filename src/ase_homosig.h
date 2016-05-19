@@ -25,6 +25,16 @@ void
 ase_homosig_ctxt_init(struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt);
 void
 ase_homosig_ctxt_clear(struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt);
+
+void
+ase_homosig_mpk_print(const struct ase_pp_t *pp, struct ase_homosig_master_t *master);
+void
+ase_homosig_pk_print(const struct ase_pp_t *pp, struct ase_homosig_pk_t *pk);
+void
+ase_homosig_sk_print(const struct ase_pp_t *pp, struct ase_homosig_sk_t *sk);
+void
+ase_homosig_ctxt_print(const struct ase_pp_t *pp, struct ase_homosig_ctxt_t *ctxt);
+
 int
 ase_homosig_mpk_send(const struct ase_pp_t *pp,
                      struct ase_homosig_master_t *master, FILE *f);
@@ -59,15 +69,11 @@ ase_homosig_vrfy(struct ase_pp_t *pp, struct ase_homosig_master_t *mpk,
                  struct ase_homosig_pk_t *pk);
 void
 ase_homosig_enc(struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                struct ase_homosig_ctxt_t *ciphertext, element_t *plaintext,
-                const unsigned int *seed);
-void
-ase_homosig_enc_select(struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
-                       const int *attrs, struct ase_homosig_ctxt_t *ciphertext,
-                       element_t *plaintext, const unsigned int *seed);
+                const int *attrs, struct ase_homosig_ctxt_t *ciphertext,
+                g1_t *plaintext, const unsigned int *seed);
 void
 ase_homosig_dec(struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
-                element_t *plaintext, struct ase_homosig_ctxt_t *ciphertext,
+                g1_t *plaintext, struct ase_homosig_ctxt_t *ciphertext,
                 const int *attrs);
 void
 ase_homosig_unlink(struct ase_pp_t *pp, struct ase_homosig_pk_t *rpk,
