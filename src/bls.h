@@ -1,7 +1,7 @@
 #ifndef BLS_H
 #define BLS_H
 
-#include <relic/relic.h>
+#include <relic.h>
 
 struct bls_t {
     g1_t h;

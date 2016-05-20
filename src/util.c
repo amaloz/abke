@@ -3,6 +3,7 @@
 #include <string.h>
 #include <openssl/sha.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #ifndef MIN
 #define MIN(a, b) (a) < (b) ? (a) : (b)

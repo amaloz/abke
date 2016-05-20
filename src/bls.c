@@ -1,5 +1,4 @@
 #include "bls.h"
-#include <relic/relic.h>
 #include "util.h"
 
 int

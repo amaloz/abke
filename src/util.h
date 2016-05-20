@@ -2,7 +2,7 @@
 #define UTIL_H
 
 #include <stdint.h>
-#include <relic/relic.h>
+#include <relic.h>
 #include <garble.h>
 
 #define CA_HOST "127.0.0.1"
@@ -10,6 +10,8 @@
 
 #define g1_mul_norm(A, B, C) \
     { g1_mul(A, B, C); g1_norm(A, A); }
+#define g1_mul_fix_norm(A, T, C)              \
+    { g1_mul_fix(A, (const g1_t *) T, C); g1_norm(A, A); }
 #define g1_sub_norm(A, B, C) \
     { g1_sub(A, B, C); g1_norm(A, A); }
 #define g1_add_norm(A, B, C) \

@@ -119,7 +119,7 @@ ca_init(const char *host, const char *port, int m, int ntimes,
     if (ase_pp_init(&pp, m, param))
         return -1;
     ase_master_init(&pp, &master, type);
- 
+
     while (nconnected < 2 * ntimes * ntimes) {
         if (loop(sockfd, &pp, &master, type) == -1)
             return -1;

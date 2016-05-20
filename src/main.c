@@ -227,5 +227,7 @@ main(int argc, char *argv[])
     }
 
     free(args.attrs);
+
+    core_clean();
     return res;
 }

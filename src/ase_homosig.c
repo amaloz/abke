@@ -445,16 +445,10 @@ ase_homosig_gen(struct ase_pp_t *pp, struct ase_homosig_master_t *msk,
 
     for (int i = 0; i < pp->m; ++i) {
         bn_rand_mod(sk->rs[i], ord);
-        switch (attrs[i]) {
-        case 0:
-            g1_mul_norm(pk->es[i], pk->g, sk->rs[i]);
-            break;
-        case 1:
+        if (attrs[i]) {
             g1_mul_norm(pk->es[i], pk->h, sk->rs[i]);
-            break;
-        default:
-            assert(0);
-            abort();
+        } else {
+            g1_mul_norm(pk->es[i], pk->g, sk->rs[i]);
         }
         g1_add_norm(tmp, pk->u, pk->es[i]);
         bls_sign(&msk->jsigs[i], pk->esigs[i], tmp);
@@ -507,9 +501,8 @@ ase_homosig_enc(struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
     g1_get_ord(ord);
 
     if (seed) {
-        rand_clean();
-        rand_init();
-        /* pbc_random_set_deterministic(*seed); */
+        core_get()->seeded = 0;
+        rand_seed((uint8_t *) seed, sizeof(unsigned int));
     }
 
     bn_rand_mod(s, ord);
@@ -529,9 +522,7 @@ ase_homosig_enc(struct ase_pp_t *pp, struct ase_homosig_pk_t *pk,
     }
 
     if (seed) {
-        rand_clean();
         rand_init();
-        /* pbc_random_set_file("/dev/urandom"); */
     }
 
     bn_free(ord);
@@ -546,14 +537,17 @@ ase_homosig_dec(struct ase_pp_t *pp, struct ase_homosig_sk_t *sk,
                 const int *attrs)
 {
     g1_t tmp;
+    g1_t g_tbl[G1_TABLE], h_tbl[G1_TABLE];
 
     g1_new(tmp);
+    g1_mul_pre(g_tbl, ciphertext->g);
+    g1_mul_pre(h_tbl, ciphertext->h);
 
     for (int i = 0; i < pp->m; ++i) {
         if (attrs[i]) {
-            g1_mul_norm(tmp, ciphertext->h, sk->rs[i]);
+            g1_mul_fix_norm(tmp, h_tbl, sk->rs[i]);
         } else {
-            g1_mul_norm(tmp, ciphertext->g, sk->rs[i]);
+            g1_mul_fix_norm(tmp, g_tbl, sk->rs[i]);
         }
         g1_sub_norm(plaintext[i], ciphertext->c2s[2 * i + attrs[i]], tmp);
     }
