@@ -1,4 +1,4 @@
-NTIMES=5
+NTIMES=10
 
 mkdir -p logs
 
