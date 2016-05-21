@@ -58,7 +58,7 @@ struct ase_ctxt_t {
 };
 
 int
-ase_pp_init(struct ase_pp_t *pp, int m, const char *fname);
+ase_pp_init(struct ase_pp_t *pp, int m);
 void
 ase_pp_clear(struct ase_pp_t *pp);
 

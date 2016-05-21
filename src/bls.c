@@ -4,25 +4,19 @@
 int
 bls_init(struct bls_t *bls)
 {
-    bn_t tmp;
+    bn_t ord;
 
     bls_pk_init(bls);
     bn_new(bls->privkey);
-    bn_new(tmp);
+    bn_new(ord);
 
-    g1_get_ord(tmp);
-    bn_rand_mod(bls->privkey, tmp);
+    g1_get_ord(ord);
+    bn_rand_mod(bls->privkey, ord);
 
     g2_rand(bls->g);
     g2_mul_norm(bls->pubkey, bls->g, bls->privkey);
 
-    bn_free(tmp);
-
-    /* element_init_Zr(bls->privkey, pairing); */
-
-    /* element_random(bls->g); */
-    /* element_random(bls->privkey); */
-    /* element_pow_zn(bls->pubkey, bls->g, bls->privkey); */
+    bn_free(ord);
 
     return 0;
 }
@@ -115,13 +109,4 @@ bls_verify(struct bls_t *bls, g1_t sig, g1_t h)
     gt_free(t1);
     gt_free(t2);
     return res == CMP_EQ;
-
-    /* element_init_GT(t1, pairing); */
-    /* element_init_GT(t2, pairing); */
-    /* pairing_apply(t1, sig, bls->g, pairing); */
-    /* pairing_apply(t2, h, bls->pubkey, pairing); */
-    /* res = element_cmp(t1, t2); */
-    /* element_clear(t1); */
-    /* element_clear(t2); */
-    /* return !res; */
 }

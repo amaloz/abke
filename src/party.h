@@ -21,16 +21,14 @@ ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
 
 int
 ca_init(const char *host, const char *port, int m, int ntimes,
-        const char *param, enum ase_type_e type);
+        enum ase_type_e type);
 
 int
 client_go(const char *host, const char *port, const int *attrs, int m,
-          int q, const char *param, struct measurement_t *measurements,
-          enum ase_type_e type);
+          int q, struct measurement_t *measurements, enum ase_type_e type);
 int
 server_go(const char *host, const char *port, int m, int q,
-          const char *param, struct measurement_t *measurements,
-          enum ase_type_e type);
+          struct measurement_t *measurements, enum ase_type_e type);
 
 
 #endif

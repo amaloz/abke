@@ -156,8 +156,7 @@ _send_randomness_and_inputs(const struct ase_pp_t *pp, block gc_seed,
 
 int
 server_go(const char *host, const char *port, int m, int q,
-          const char *param, struct measurement_t *measurements,
-          enum ase_type_e type)
+          struct measurement_t *measurements, enum ase_type_e type)
 {
     FILE *f = NULL;
     int sockfd = -1, fd = -1;
@@ -176,7 +175,7 @@ server_go(const char *host, const char *port, int m, int q,
     abke_time_t tmp_comp, tmp_comm;
     int res = -1;
 
-    fprintf(stderr, "Starting server with m = %d and pairing %s\n", m, param);
+    fprintf(stderr, "Starting server with m = %d\n", m);
 
 #ifdef THPOOL
     fprintf(stderr, "Using thread pool\n");
@@ -189,7 +188,7 @@ server_go(const char *host, const char *port, int m, int q,
 #ifdef THPOOL
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
-        ase_pp_init(&pp, m, param);
+        ase_pp_init(&pp, m);
         ase_master_init(&pp, &mpk, type);
         ase_pk_init(&pp, &client_pk, type);
         ase_ctxt_init(&pp, &ctxt, type);

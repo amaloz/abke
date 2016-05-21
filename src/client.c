@@ -212,8 +212,7 @@ cleanup:
 
 int
 client_go(const char *host, const char *port, const int *attrs, int m,
-          int q, const char *param, struct measurement_t *measurements,
-          enum ase_type_e type)
+          int q, struct measurement_t *measurements, enum ase_type_e type)
 {
     int fd = -1;
     FILE *f = NULL;
@@ -231,7 +230,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     abke_time_t tmp_comp, tmp_comm;
     int res = -1;
 
-    fprintf(stderr, "Starting client with m = %d and pairing %s\n", m, param);
+    fprintf(stderr, "Starting client with m = %d\n", m);
     fprintf(stderr, "Attribute vector: ");
     for (int i = 0; i < m; ++i) {
         fprintf(stderr, "%d", attrs[i]);
@@ -240,7 +239,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        ase_pp_init(&pp, m, param);
+        ase_pp_init(&pp, m);
         ase_mpk_init(&pp, &mpk, type);
         ase_pk_init(&pp, &pk, type);
         ase_sk_init(&pp, &sk, type);
@@ -260,7 +259,7 @@ client_go(const char *host, const char *port, const int *attrs, int m,
 
     _start = get_time();
     {
-        /* ase_unlink(&pp, &pk, &sk, &pk, &sk, type); */
+        ase_unlink(&pp, &pk, &sk, &pk, &sk, type);
     }
     _end = get_time();
     fprintf(stderr, "Randomize public key: %f\n", _end - _start);

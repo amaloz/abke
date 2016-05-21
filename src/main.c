@@ -18,8 +18,6 @@ struct args {
     char *host;
     char *port;
     int *attrs;
-    char *param;
-    char *policy;
 };
 
 static void
@@ -33,8 +31,6 @@ args_init(struct args *args)
     args->host = "127.0.0.1";
     args->port = "1250";
     args->attrs = NULL;
-    args->param = "params/d224.param";
-    args->policy = NULL;
 }
 
 static struct option opts[] = {
@@ -42,13 +38,11 @@ static struct option opts[] = {
     {"server", no_argument, 0, 's'},
     {"client", no_argument, 0, 'c'},
     {"nattrs", required_argument, 0, 'm'},
-    {"param", required_argument, 0, 'p'},
-    {"policy", required_argument, 0, 'P'},
     {"ngates", required_argument, 0, 'q'},
     {"ntimes", required_argument, 0, 't'},
     {0, 0, 0, 0}
 };
-static char *short_opts = "acm:p:q:st:";
+static char *short_opts = "acm:q:st:";
 
 static int
 compare(const void * a, const void * b)
@@ -75,7 +69,7 @@ static int
 go(struct args *args)
 {
     if (args->role == ROLE_CA) {
-        ca_init(CA_HOST, CA_PORT, args->m, args->ntimes, args->param, args->type);
+        ca_init(CA_HOST, CA_PORT, args->m, args->ntimes, args->type);
     } else {
         struct timespec t1, t2;
         struct measurement_t measurements;
@@ -89,8 +83,8 @@ go(struct args *args)
         double *commMedians = calloc(args->ntimes, sizeof(double));
         double meanComp, meanOComp, meanComm;
 
-        t1.tv_sec = 0;
-        t1.tv_nsec = 100000000L;
+        t1.tv_sec = 1L;
+        t1.tv_nsec = 0L;
 
         if (args->ngates < args->m - 1)
             args->ngates = args->m - 1;
@@ -100,12 +94,11 @@ go(struct args *args)
                 switch (args->role) {
                 case ROLE_SERVER:
                     server_go(args->host, args->port, args->m, args->ngates,
-                              args->param, &measurements, args->type);
+                              &measurements, args->type);
                     break;
                 case ROLE_CLIENT:
                     client_go(args->host, args->port, args->attrs, args->m,
-                              args->ngates, args->param, &measurements,
-                              args->type);
+                              args->ngates, &measurements, args->type);
                     nanosleep(&t1, &t2);
                     break;
                 default:
@@ -183,12 +176,6 @@ main(int argc, char *argv[])
             break;
         case 'm':
             args.m = atoi(optarg);
-            break;
-        case 'p':
-            args.param = optarg;
-            break;
-        case 'P':
-            args.policy = optarg;
             break;
         case 'q':
             args.ngates = atoi(optarg);

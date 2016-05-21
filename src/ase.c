@@ -6,38 +6,15 @@
 #include <assert.h>
 
 int
-ase_pp_init(struct ase_pp_t *pp, int m, const char *fname)
+ase_pp_init(struct ase_pp_t *pp, int m)
 {
-    /* char *param; */
-    /* size_t count, fsize; */
-    /* FILE *f; */
-    int res = 0;
-
     pp->m = m;
-
-    /* if ((f = fopen(fname, "r")) == NULL) { */
-    /*     pbc_die("fopen"); */
-    /* } */
-
-    /* fsize = filesize(fname); */
-    /* param = malloc(fsize); */
-
-    /* count = fread(param, sizeof(char), fsize, f); */
-    /* if (!count) { */
-    /*     pbc_die("fread"); */
-    /* } */
-    /* res = pairing_init_set_buf(pp->pairing, param, count); */
-
-    /* free(param); */
-    /* fclose(f); */
-
-    return res;
+    return 0;
 }
 
 void
 ase_pp_clear(struct ase_pp_t *pp)
 {
-    /* pairing_clear(pp->pairing); */
 }
 
 void

@@ -98,7 +98,7 @@ ca_info(struct ase_pp_t *pp, struct ase_master_t *mpk, enum role_e role,
 
 int
 ca_init(const char *host, const char *port, int m, int ntimes,
-        const char *param, enum ase_type_e type)
+        enum ase_type_e type)
 {
     int sockfd;
     struct ase_master_t master;
@@ -116,7 +116,7 @@ ca_init(const char *host, const char *port, int m, int ntimes,
     (void) RAND_bytes((unsigned char *) &seed, sizeof seed);
     (void) garble_seed(&seed);
 
-    if (ase_pp_init(&pp, m, param))
+    if (ase_pp_init(&pp, m))
         return -1;
     ase_master_init(&pp, &master, type);
 
