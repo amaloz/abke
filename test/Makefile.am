@@ -1,5 +1,5 @@
-AM_CFLAGS = $(COMMON_CFLAGS) $(EXTRA_CFLAGS) -I$(top_srcdir)/src -maes -msse4 -march=native
-AM_LDFLAGS = -lcrypto -lssl -lgmp -lrelic -lgarble -lgarblec
+AM_CFLAGS = $(COMMON_CFLAGS) $(EXTRA_CFLAGS) -I$(top_srcdir)/src -I$(top_srcdir)/relic/include -maes -msse4 -march=native
+AM_LDFLAGS = -L$(top_srcdir)/relic/lib -lcrypto -lssl -lgmp -lrelic -lgarble -lgarblec
 
 MY_SOURCES = \
 ../src/ase.c \

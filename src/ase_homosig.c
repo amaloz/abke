@@ -467,6 +467,9 @@ ase_homosig_vrfy(struct ase_pp_t *pp, struct ase_homosig_master_t *mpk,
 
     g1_new(tmp);
 
+    if (!g1_is_valid(pk->g) || !g1_is_valid(pk->h) || !g1_is_valid(pk->u))
+        goto cleanup;
+
     if (!bls_verify(&mpk->gsig, pk->gsig, pk->g))
         goto cleanup;
     if (!bls_verify(&mpk->hsig, pk->hsig, pk->h))

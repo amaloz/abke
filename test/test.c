@@ -24,9 +24,55 @@ check_bls(void)
         return 1;
     }
 
+    g1_rand(in);
+    BENCH_BEGIN("bls_sign") {
+        BENCH_ADD(bls_sign(&bls, sig, in));
+    }
+    BENCH_END;
+    BENCH_BEGIN("bls_verify") {
+        BENCH_ADD(bls_verify(&bls, sig, in));
+    }
+    BENCH_END;
+
     bls_clear(&bls);
     g1_free(in);
     g1_free(sig);
+
+    return 0;
+}
+
+#define N_BATCH 10
+
+static int
+check_bls_batch_verify(void)
+{
+    struct bls_t bls;
+    g1_t *ins;
+    g1_t *sigs;
+
+    bls_init(&bls);
+    sigs = calloc(N_BATCH, sizeof(g1_t));
+    ins =  calloc(N_BATCH, sizeof(g1_t));
+    for (int i = 0; i < N_BATCH; ++i) {
+        g1_new(ins[i]);
+        g1_new(sigs[i]);
+        g1_rand(ins[i]);
+        bls_sign(&bls, sigs[i], ins[i]);
+        if (bls_verify(&bls, sigs[i], ins[i]) != 1) {
+            printf("verify failed!\n");
+            return 1;
+        }
+    }
+
+    if (bls_batch_verify(&bls, N_BATCH, sigs, ins) != 1) {
+        printf("batch verify failed!\n");
+        return 1;
+    }
+
+    BENCH_BEGIN("bls_batch_verify") {
+        BENCH_ADD(bls_batch_verify(&bls, N_BATCH, sigs, ins));
+    }
+    BENCH_END;
 
     return 0;
 }
@@ -61,7 +107,7 @@ check_ase_homosig(void)
         g1_rand(output[i]);
     }
 
-    ase_pp_init(&pp, N_ATTRS, NULL);
+    ase_pp_init(&pp, N_ATTRS);
     ase_homosig_master_init(&pp, &master);
     ase_homosig_pk_init(&pp, &pk);
     ase_homosig_sk_init(&pp, &sk);
@@ -109,9 +155,12 @@ main(void)
         return EXIT_FAILURE;
     }
 
+    pc_param_print();
+
     if (check_bls())
         return 1;
-
+    if (check_bls_batch_verify())
+        return 1;
     if (check_ase_homosig())
         return 1;
 

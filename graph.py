@@ -47,7 +47,7 @@ def newfig(width):
 def savefig(fname):
     plt.savefig('{}.eps'.format(fname), dpi=200)
 
-def graph(ms, server, client, ssents, csents, fname):
+def graph(ms, server, client, ssents, csents, fname, ylabel):
     width = 0.8 / (2 * len(ms))
 
     fig, ax = newfig(0.8)
@@ -57,7 +57,7 @@ def graph(ms, server, client, ssents, csents, fname):
     if ssents is not None and csents is not None:
         axy = ax.twinx()
         axy.set_ylim((0, 60))
-        axy.set_ylabel(r'data sent (Mb)', rotation=270, labelpad=20)
+        axy.set_ylabel(r'Data Sent (Mb)', rotation=270, labelpad=20)
         axy.set_xlim((0.0, 3.0))
     else:
         axy = None
@@ -80,30 +80,30 @@ def graph(ms, server, client, ssents, csents, fname):
             s1 = axy.scatter(np.array(ind) - width / 2, ssents[m], color=dotcolors[0])
             s2 = axy.scatter(np.array(ind) + width / 2, csents[m], color=dotcolors[1])
             axy.legend((s1,),
-                       (r' data sent',),
+                       (r' Data Sent',),
                        loc='upper right')
             # axy.legend((s1, s2),
             #            (r'Server data sent',
             #             r'Client data sent'),
                        # loc='upper right')
     total = np.array(total)
-    ax.set_xlabel(r'number of AND gates')
+    ax.set_xlabel(r'Number of AND Gates')
     ax.set_xticks(total + width)
     ax.set_xticklabels(tuple(['$10^3$', '$10^4$', '$10^5$',
                               '$10^3$', '$10^4$', '$10^5$',
                               '$10^3$', '$10^4$', '$10^5$']))
-    ax.set_ylabel(r'time (s)')
+    ax.set_ylabel(r'%s Time (s)' % ylabel)
     # ax.set_yscale('log')
 
 
     if axy is not None:
         axx.set_ylim((0.0,3.5))
     axx.set_xlim(ax.get_xlim())
-    axx.set_xlabel(r'number of attributes')
+    axx.set_xlabel(r'Number of Attributes')
     axx.set_xticks(np.array([0.5, 1.5, 2.5]))
     axx.set_xticklabels(['10', '50', '200'])
 
-    ax.legend((r1[0], r2[0]), (r'Server time', r'Client time'), loc='upper left')
+    ax.legend((r1[0], r2[0]), (r'Server Time', r'Client Time'), loc='upper left')
     savefig(fname)
 
 def main(argv):
@@ -164,9 +164,9 @@ def main(argv):
 
     ms = list(qs.keys())
     ms.sort()
-    graph(ms, scomps, ccomps, None, None, 'computation')
-    graph(ms, socomps, cocomps, None, None, 'computation-online')
-    graph(ms, scomms, ccomms, ssents, csents, 'communication')
+    graph(ms, scomps, ccomps, None, None, 'computation', 'Computation')
+    graph(ms, socomps, cocomps, None, None, 'computation-online', 'Computation')
+    graph(ms, scomms, ccomms, ssents, csents, 'communication', 'Communication')
 
 def ema(y, a):
     s = []

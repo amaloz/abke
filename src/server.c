@@ -189,7 +189,8 @@ server_go(const char *host, const char *port, int m, int q,
         g_thpool = thpool_init(2); /* XXX: hardcoded value */
 #endif
         ase_pp_init(&pp, m);
-        ase_master_init(&pp, &mpk, type);
+        ase_mpk_init(&pp, &mpk, type);
+
         ase_pk_init(&pp, &client_pk, type);
         ase_ctxt_init(&pp, &ctxt, type);
         inputs = calloc(2 * pp.m, sizeof(g1_t));
@@ -197,6 +198,7 @@ server_go(const char *host, const char *port, int m, int q,
             g1_new(inputs[i]);
             g1_get_gen(inputs[i]);
         }
+
         egc.ttables = calloc(2 * pp.m, sizeof(block));
         input_labels = garble_allocate_blocks(2 * pp.m);
         /* Need to call garble_seed() for garble_create_input_labels() */
@@ -271,8 +273,8 @@ server_go(const char *host, const char *port, int m, int q,
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
-    /* divide by four to mimic 5-user batching of pk verification */
-    ocomp = tmp_comp / 4;
+    /* divide by 5.4 to mimic 10-user batching of pk verification */
+    ocomp = tmp_comp / 5.4;
 
     _start = get_time();
     {
@@ -387,7 +389,7 @@ cleanup:
 
         ase_ctxt_clear(&pp, &ctxt, type);
         ase_pk_clear(&pp, &client_pk, type);
-        ase_master_clear(&pp, &mpk, type);
+        ase_mpk_clear(&pp, &mpk, type);
         ase_pp_clear(&pp);
 
         if (gc_built)

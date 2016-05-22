@@ -4,11 +4,8 @@
 #include <relic.h>
 
 struct bls_t {
-    g1_t h;
-    g2_t g, pubkey;
-    /* element_t g, h; */
+    g2_t pubkey;
     bn_t privkey;
-    /* element_t pubkey, privkey; */
 };
 
 int
@@ -30,6 +27,8 @@ bls_pk_print(struct bls_t *bls);
 void
 bls_sign(struct bls_t *bls, g1_t out, g1_t in);
 int
-bls_verify(struct bls_t *bls, g1_t sig, g1_t h);
+bls_verify(struct bls_t *bls, g1_t sig, g1_t msg);
+int
+bls_batch_verify(struct bls_t *bls, int n, g1_t *sigs, g1_t *msgs);
 
 #endif

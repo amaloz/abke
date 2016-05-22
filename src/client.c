@@ -126,6 +126,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     }
     _end = get_time();
     _comp += _end - _start;
+    fprintf(stderr, "Check (init): %f\n", _end - _start);
 
     _start = get_time();
     {
@@ -143,6 +144,7 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
     }
     _end = get_time();
     _comm += _end - _start;
+    fprintf(stderr, "Check (comm): %f\n", _end - _start);
 
     _start = get_time();
     res = -1;
@@ -162,7 +164,11 @@ _check(struct ase_pp_t *pp, struct ase_pk_t *pk, ExtGarbledCircuit *egc,
             abort();
         }
     }
+    _end = get_time();
+    _comp += _end - _start;
+    fprintf(stderr, "Check (re-encrypt): %f\n", _end - _start);
 
+    _start = get_time();
     /* Check that label map is correct and retrieve claimed input labels */
     for (int i = 0; i < 2 * pp->m; ++i) {
         block blk;
@@ -202,8 +208,8 @@ cleanup:
     _end = get_time();
     _comp += _end - _start;
 
-    fprintf(stderr, "Check (comp): %f\n", _comp);
-    fprintf(stderr, "Check (comm): %f\n", _comm);
+    fprintf(stderr, "Check (re-garble): %f\n", _end - _start);
+
     if (comm)
         *comm = _comm;
     if (comp)
