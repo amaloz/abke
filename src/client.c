@@ -202,7 +202,8 @@ cleanup:
     _end = get_time();
     _comp += _end - _start;
 
-    fprintf(stderr, "Check: %f\n", _comm + _comp);
+    fprintf(stderr, "Check (comp): %f\n", _comp);
+    fprintf(stderr, "Check (comm): %f\n", _comm);
     if (comm)
         *comm = _comm;
     if (comp)
