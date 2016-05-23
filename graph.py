@@ -52,7 +52,6 @@ def graph(ms, server, client, ssents, csents, fname, ylabel):
 
     fig, ax = newfig(0.8)
     axx = ax.twiny()
-    ax.set_xlim((0.0, 3.0))
 
     if ssents is not None and csents is not None:
         axy = ax.twinx()
@@ -97,7 +96,7 @@ def graph(ms, server, client, ssents, csents, fname, ylabel):
 
 
     if axy is not None:
-        axx.set_ylim((0.0,3.5))
+        axx.set_ylim((0.0,2.5))
     axx.set_xlim(ax.get_xlim())
     axx.set_xlabel(r'Number of Attributes')
     axx.set_xticks(np.array([0.5, 1.5, 2.5]))

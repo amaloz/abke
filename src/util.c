@@ -103,7 +103,7 @@ median(mytime_t *values, int n)
     else if (n % 2 == 1)
 		return values[(n + 1) / 2 - 1];
 	else
-		return (values[n / 2 - 1] + values[n / 2]) / 2;
+		return (values[n / 2 - 1] + values[n / 2]) / 2.0;
 }
 
 double

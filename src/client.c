@@ -207,7 +207,6 @@ cleanup:
 
     _end = get_time();
     _comp += _end - _start;
-
     fprintf(stderr, "Check (re-garble): %f\n", _end - _start);
 
     if (comm)
@@ -329,12 +328,16 @@ client_go(const char *host, const char *port, const int *attrs, int m,
     comp += _end - _start;
     ocomp += _end - _start;
 
+    tmp_comm = 0.0;
+    tmp_comp = 0.0;
     res = _commit(output_label, &decom, f, &tmp_comm, &tmp_comp);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
     comp += tmp_comp;
     ocomp += tmp_comp;
 
+    tmp_comm = 0.0;
+    tmp_comp = 0.0;
     res = _check(&pp, &pk, &egc, &ctxt, attrs, q, f, &tmp_comm, &tmp_comp, type);
     if (res == -1) goto cleanup;
     comm += tmp_comm;
